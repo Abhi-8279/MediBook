@@ -1,8 +1,9 @@
-.tools/
 **/target/
+**/*.log
+**/.DS_Store
 **/.classpath
-**/.factorypath
 **/.project
 **/.settings/
-*.log
+.idea/
+*.iml
 
