@@ -1,0 +1,51 @@
+server:
+  port: ${SERVER_PORT:8086}
+
+spring:
+  application:
+    name: review-service
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/medibook_review?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:Abhi@8279}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+  jackson:
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  auth-service:
+    base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+    connect-timeout-ms: ${AUTH_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${AUTH_SERVICE_READ_TIMEOUT_MS:5000}
+  appointment-service:
+    base-url: ${APPOINTMENT_SERVICE_URL:http://localhost:8084}
+    connect-timeout-ms: ${APPOINTMENT_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${APPOINTMENT_SERVICE_READ_TIMEOUT_MS:5000}
+  provider-service:
+    base-url: ${PROVIDER_SERVICE_URL:http://localhost:8082}
+    connect-timeout-ms: ${PROVIDER_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${PROVIDER_SERVICE_READ_TIMEOUT_MS:5000}
+  internal:
+    api-key: ${INTERNAL_API_KEY:medibook-internal-key-change-me}
+    header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
