@@ -262,6 +262,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         slot.setBooked(true);
         slot.setBookingReference(request.bookingReference().trim());
         slot.setBookedAt(Instant.now(clock));
+        slot.setCompleted(false);
+        slot.setCompletedAt(null);
 
         AvailabilitySlot saved = availabilitySlotRepository.saveAndFlush(slot);
         syncProviderAvailabilityQuietly(slot.getProviderId());
@@ -278,6 +280,26 @@ public class ScheduleServiceImpl implements ScheduleService {
         slot.setBooked(false);
         slot.setBookingReference(null);
         slot.setBookedAt(null);
+        slot.setCompleted(false);
+        slot.setCompletedAt(null);
+
+        AvailabilitySlot saved = availabilitySlotRepository.saveAndFlush(slot);
+        syncProviderAvailabilityQuietly(slot.getProviderId());
+        return toResponse(saved);
+    }
+
+    @Override
+    public AvailabilitySlotResponse completeSlotInternally(String slotId) {
+        AvailabilitySlot slot = findSlotOrThrow(slotId);
+        if (!slot.isBooked()) {
+            throw new IllegalStateException("Only booked slots can be completed");
+        }
+        if (slot.isCompleted()) {
+            throw new IllegalStateException("Slot is already completed");
+        }
+
+        slot.setCompleted(true);
+        slot.setCompletedAt(Instant.now(clock));
 
         AvailabilitySlot saved = availabilitySlotRepository.saveAndFlush(slot);
         syncProviderAvailabilityQuietly(slot.getProviderId());
@@ -508,6 +530,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                 slot.getBlockedReason(),
                 slot.getBookingReference(),
                 slot.getBookedAt(),
+                slot.isCompleted(),
+                slot.getCompletedAt(),
                 slot.getCreatedAt(),
                 slot.getUpdatedAt());
     }
@@ -523,6 +547,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private boolean isBookableAtCurrentTime(AvailabilitySlot slot) {
         return !slot.isBooked()
                 && !slot.isBlocked()
+                && !slot.isCompleted()
                 && !slotEndDateTime(slot).isBefore(LocalDateTime.now(clock));
     }
 

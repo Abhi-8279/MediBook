@@ -18,6 +18,8 @@ public record AvailabilitySlotResponse(
         String blockedReason,
         String bookingReference,
         Instant bookedAt,
+        boolean completed,
+        Instant completedAt,
         Instant createdAt,
         Instant updatedAt) {
 }

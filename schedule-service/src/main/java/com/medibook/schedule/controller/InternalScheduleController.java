@@ -38,6 +38,11 @@ public class InternalScheduleController {
         return ResponseEntity.ok(scheduleService.releaseSlotInternally(slotId));
     }
 
+    @PostMapping("/slots/{slotId}/complete")
+    public ResponseEntity<AvailabilitySlotResponse> completeSlot(@PathVariable String slotId) {
+        return ResponseEntity.ok(scheduleService.completeSlotInternally(slotId));
+    }
+
     @GetMapping("/slots/{slotId}")
     public ResponseEntity<AvailabilitySlotResponse> getSlotById(@PathVariable String slotId) {
         return ResponseEntity.ok(scheduleService.getSlotByIdInternally(slotId));

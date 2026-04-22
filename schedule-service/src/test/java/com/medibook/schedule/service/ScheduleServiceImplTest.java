@@ -231,6 +231,33 @@ class ScheduleServiceImplTest {
     }
 
     @Test
+    void shouldCompleteBookedSlotInternally() {
+        AvailabilitySlot slot = buildSlot();
+        slot.setBooked(true);
+        slot.setBookingReference("appointment-77");
+        slot.setBookedAt(Instant.parse("2026-04-22T09:00:00Z"));
+
+        when(availabilitySlotRepository.findBySlotId("slot-1")).thenReturn(Optional.of(slot));
+        when(availabilitySlotRepository.saveAndFlush(any(AvailabilitySlot.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(availabilitySlotRepository.findSlots(
+                        eq("provider-1"),
+                        isNull(),
+                        eq(LocalDate.of(2026, 4, 22)),
+                        isNull(),
+                        eq(false),
+                        eq(false)))
+                .thenReturn(List.of());
+
+        AvailabilitySlotResponse response = scheduleService.completeSlotInternally("slot-1");
+
+        assertThat(response.booked()).isTrue();
+        assertThat(response.completed()).isTrue();
+        assertThat(response.completedAt()).isEqualTo(Instant.parse("2026-04-22T10:00:00Z"));
+        verify(providerServiceGateway).updateProviderAvailability("provider-1", false);
+    }
+
+    @Test
     void shouldSyncProviderAvailabilityUsingOnlyStillBookableSlots() {
         AvailabilitySlot slot = buildSlot();
 

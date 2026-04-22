@@ -50,6 +50,8 @@ public interface ScheduleService {
 
     AvailabilitySlotResponse releaseSlotInternally(String slotId);
 
+    AvailabilitySlotResponse completeSlotInternally(String slotId);
+
     AvailabilitySlotResponse getSlotByIdInternally(String slotId);
 
     List<AvailabilitySlotResponse> getAvailableSlotsByProviderInternally(

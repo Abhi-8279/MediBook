@@ -56,6 +56,12 @@ public class AvailabilitySlot {
     @Column(name = "booked_at")
     private Instant bookedAt;
 
+    @Column(name = "is_completed", nullable = false)
+    private boolean completed;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -177,6 +183,22 @@ public class AvailabilitySlot {
 
     public void setBookedAt(Instant bookedAt) {
         this.bookedAt = bookedAt;
+    }
+
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(Instant completedAt) {
+        this.completedAt = completedAt;
     }
 
     public Instant getCreatedAt() {
