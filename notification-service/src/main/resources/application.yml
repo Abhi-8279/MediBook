@@ -1,0 +1,67 @@
+server:
+  port: ${SERVER_PORT:8087}
+
+spring:
+  application:
+    name: notification-service
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/medibook_notification?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:Abhi@8279}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+  jackson:
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    mail:
+      enabled: false
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  auth-service:
+    base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+    connect-timeout-ms: ${AUTH_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${AUTH_SERVICE_READ_TIMEOUT_MS:5000}
+  internal:
+    api-key: ${INTERNAL_API_KEY:medibook-internal-key-change-me}
+    header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
+    from-address: ${NOTIFICATION_EMAIL_FROM:no-reply@medibook.local}
+  sms:
+    enabled: ${NOTIFICATION_SMS_ENABLED:false}
+    provider-url: ${NOTIFICATION_SMS_PROVIDER_URL:}
+    auth-token: ${NOTIFICATION_SMS_AUTH_TOKEN:}
+    sender-id: ${NOTIFICATION_SMS_SENDER_ID:MediBook}
+  reminders:
+    dispatch-interval-ms: ${NOTIFICATION_REMINDER_DISPATCH_INTERVAL_MS:30000}

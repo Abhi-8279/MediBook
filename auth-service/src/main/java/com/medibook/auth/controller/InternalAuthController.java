@@ -3,8 +3,10 @@ package com.medibook.auth.controller;
 import com.medibook.auth.dto.request.ValidateTokenRequest;
 import com.medibook.auth.dto.response.TokenValidationResponse;
 import com.medibook.auth.dto.response.UserSummaryResponse;
+import com.medibook.auth.enums.Role;
 import com.medibook.auth.service.AuthService;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,5 +40,9 @@ public class InternalAuthController {
     public ResponseEntity<UserSummaryResponse> getUserByEmail(@RequestParam String email) {
         return ResponseEntity.ok(authService.getUserSummaryByEmail(email));
     }
-}
 
+    @GetMapping("/users")
+    public ResponseEntity<List<UserSummaryResponse>> getUsers(@RequestParam(required = false) Role role) {
+        return ResponseEntity.ok(authService.getUsers(role));
+    }
+}
