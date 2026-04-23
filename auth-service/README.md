@@ -40,6 +40,7 @@ Set these environment variables if you do not want the defaults from `applicatio
 - `MYSQL_URL`
 - `MYSQL_USERNAME`
 - `MYSQL_PASSWORD`
+- `EUREKA_SERVER_URL`
 - `JWT_SECRET`
 - `INTERNAL_API_KEY`
 - `INTERNAL_API_KEY_HEADER`
@@ -73,3 +74,7 @@ X-Internal-Api-Key: medibook-internal-key-change-me
 - OAuth2 logins default to `PATIENT`; provider verification remains the responsibility of the provider-service/admin flow from the MediBook case study.
 - Refresh tokens are persisted in MySQL and revoked on logout, password change, and deactivation.
 - Other MediBook services should prefer the `/api/v1/auth/internal/*` endpoints instead of public user-facing endpoints.
+
+Jar output:
+
+- `target/auth-service-0.0.1-SNAPSHOT-exec.jar`

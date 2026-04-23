@@ -1,7 +1,8 @@
 # MediBook API Gateway
 
-This service is the single entry point for the MediBook microservices system. It currently fronts the completed
-`auth-service` and already includes route mappings for the other services you plan to add next.
+This service is the single entry point for the MediBook microservices system. It now registers with Eureka and routes
+to downstream services through service discovery by default, while still allowing explicit URL overrides through
+environment variables.
 
 ## What it does
 
@@ -9,7 +10,7 @@ This service is the single entry point for the MediBook microservices system. It
 - Centralizes CORS handling for your frontend or MVC layer
 - Exposes health and gateway actuator endpoints
 - Adds a request ID header when a client does not send one
-- Uses environment variables so local, Docker, and cloud deployments can share the same code
+- Uses Eureka service discovery by default and environment-variable overrides when you need fixed URLs
 
 ## Current service map
 
@@ -22,7 +23,7 @@ This service is the single entry point for the MediBook microservices system. It
 - `/api/v1/notifications/**` -> `notification-service`
 - `/api/v1/records/**` -> `record-service`
 
-Only `auth-service` needs to be running right now for the existing route to work.
+Run `eureka-server` first, then start the gateway and whichever backend services you want registered.
 
 ## Default ports
 
@@ -39,6 +40,7 @@ Only `auth-service` needs to be running right now for the existing route to work
 ## Important environment variables
 
 - `SERVER_PORT`
+- `EUREKA_SERVER_URL`
 - `CORS_ALLOWED_ORIGINS`
 - `AUTH_SERVICE_URL`
 - `PROVIDER_SERVICE_URL`
@@ -56,7 +58,7 @@ Only `auth-service` needs to be running right now for the existing route to work
 ..\.tools\apache-maven-3.9.9\bin\mvn.cmd spring-boot:run
 ```
 
-If you want to override the auth route locally:
+If you want to override the auth route locally instead of using Eureka:
 
 ```powershell
 $env:AUTH_SERVICE_URL="http://localhost:8081"
@@ -79,3 +81,6 @@ Build the image from the `api-gateway` folder:
 docker build -t medibook/api-gateway .
 ```
 
+Jar output:
+
+- `target/api-gateway-0.0.1-SNAPSHOT-exec.jar`

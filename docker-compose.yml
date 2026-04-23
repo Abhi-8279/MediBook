@@ -1,0 +1,253 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: medibook-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+    ports:
+      - "3306:3306"
+    volumes:
+      - medibook-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-Abhi@8279}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  eureka-server:
+    build:
+      context: ./eureka-server
+    container_name: medibook-eureka-server
+    ports:
+      - "8761:8761"
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: medibook-auth-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+      JWT_SECRET: ${JWT_SECRET:-medibook-auth-secret-key-change-before-production-123456}
+    ports:
+      - "8081:8081"
+
+  provider-service:
+    build:
+      context: ./provider-service
+    container_name: medibook-provider-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_provider?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+    ports:
+      - "8082:8082"
+
+  schedule-service:
+    build:
+      context: ./schedule-service
+    container_name: medibook-schedule-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      provider-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_schedule?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      PROVIDER_SERVICE_URL: http://provider-service:8082
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+    ports:
+      - "8083:8083"
+
+  appointment-service:
+    build:
+      context: ./appointment-service
+    container_name: medibook-appointment-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      provider-service:
+        condition: service_started
+      schedule-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_appointment?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      PROVIDER_SERVICE_URL: http://provider-service:8082
+      SCHEDULE_SERVICE_URL: http://schedule-service:8083
+      PAYMENT_SERVICE_URL: http://payment-service:8085
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+    ports:
+      - "8084:8084"
+
+  payment-service:
+    build:
+      context: ./payment-service
+    container_name: medibook-payment-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      provider-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_payment?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      APPOINTMENT_SERVICE_URL: http://appointment-service:8084
+      PROVIDER_SERVICE_URL: http://provider-service:8082
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+    ports:
+      - "8085:8085"
+
+  review-service:
+    build:
+      context: ./review-service
+    container_name: medibook-review-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      provider-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_review?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      APPOINTMENT_SERVICE_URL: http://appointment-service:8084
+      PROVIDER_SERVICE_URL: http://provider-service:8082
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+    ports:
+      - "8086:8086"
+
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: medibook-notification-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_notification?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+      NOTIFICATION_EMAIL_ENABLED: ${NOTIFICATION_EMAIL_ENABLED:-false}
+      NOTIFICATION_SMS_ENABLED: ${NOTIFICATION_SMS_ENABLED:-false}
+    ports:
+      - "8087:8087"
+
+  record-service:
+    build:
+      context: ./record-service
+    container_name: medibook-record-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      provider-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/medibook_record?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      AUTH_SERVICE_URL: http://auth-service:8081
+      APPOINTMENT_SERVICE_URL: http://appointment-service:8084
+      PROVIDER_SERVICE_URL: http://provider-service:8082
+      NOTIFICATION_SERVICE_URL: http://notification-service:8087
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
+    ports:
+      - "8088:8088"
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: medibook-api-gateway
+    depends_on:
+      eureka-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      provider-service:
+        condition: service_started
+      schedule-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      review-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      record-service:
+        condition: service_started
+    environment:
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+    ports:
+      - "8080:8080"
+
+volumes:
+  medibook-mysql-data:
