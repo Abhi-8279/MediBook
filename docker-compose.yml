@@ -14,6 +14,32 @@ services:
       timeout: 5s
       retries: 12
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: medibook-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: medibook-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   eureka-server:
     build:
       context: ./eureka-server
@@ -51,12 +77,16 @@ services:
         condition: service_started
       auth-service:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/medibook_provider?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       MYSQL_USERNAME: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       AUTH_SERVICE_URL: http://auth-service:8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
     ports:
       - "8082:8082"
@@ -74,6 +104,8 @@ services:
         condition: service_started
       provider-service:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/medibook_schedule?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       MYSQL_USERNAME: root
@@ -81,6 +113,8 @@ services:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       AUTH_SERVICE_URL: http://auth-service:8081
       PROVIDER_SERVICE_URL: http://provider-service:8082
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
     ports:
       - "8083:8083"
@@ -100,6 +134,8 @@ services:
         condition: service_started
       schedule-service:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/medibook_appointment?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       MYSQL_USERNAME: root
@@ -109,6 +145,10 @@ services:
       PROVIDER_SERVICE_URL: http://provider-service:8082
       SCHEDULE_SERVICE_URL: http://schedule-service:8083
       PAYMENT_SERVICE_URL: http://payment-service:8085
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
     ports:
       - "8084:8084"
@@ -128,6 +168,8 @@ services:
         condition: service_started
       provider-service:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/medibook_payment?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       MYSQL_USERNAME: root
@@ -136,6 +178,10 @@ services:
       AUTH_SERVICE_URL: http://auth-service:8081
       APPOINTMENT_SERVICE_URL: http://appointment-service:8084
       PROVIDER_SERVICE_URL: http://provider-service:8082
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
     ports:
       - "8085:8085"
@@ -178,12 +224,18 @@ services:
         condition: service_started
       auth-service:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/medibook_notification?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       MYSQL_USERNAME: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       AUTH_SERVICE_URL: http://auth-service:8081
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
       NOTIFICATION_EMAIL_ENABLED: ${NOTIFICATION_EMAIL_ENABLED:-false}
       NOTIFICATION_SMS_ENABLED: ${NOTIFICATION_SMS_ENABLED:-false}
@@ -207,6 +259,8 @@ services:
         condition: service_started
       notification-service:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       MYSQL_URL: jdbc:mysql://mysql:3306/medibook_record?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       MYSQL_USERNAME: root
@@ -216,6 +270,10 @@ services:
       APPOINTMENT_SERVICE_URL: http://appointment-service:8084
       PROVIDER_SERVICE_URL: http://provider-service:8082
       NOTIFICATION_SERVICE_URL: http://notification-service:8087
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
     ports:
       - "8088:8088"

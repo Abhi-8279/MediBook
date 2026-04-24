@@ -10,6 +10,7 @@ import com.medibook.schedule.dto.response.AvailabilitySlotResponse;
 import com.medibook.schedule.entity.AvailabilitySlot;
 import com.medibook.schedule.enums.RecurrenceType;
 import com.medibook.schedule.enums.Role;
+import com.medibook.schedule.config.CacheConfig;
 import com.medibook.schedule.exception.ExternalServiceException;
 import com.medibook.schedule.exception.ResourceNotFoundException;
 import com.medibook.schedule.exception.SlotConflictException;
@@ -31,6 +32,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +65,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse addSlot(AuthenticatedUser authenticatedUser, AddSlotRequest request) {
         String providerId = resolveCurrentProviderId(authenticatedUser);
         SlotWindow slotWindow = SlotWindow.from(request.date(), request.startTime(), request.endTime(), request.durationMinutes());
@@ -74,6 +83,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public List<AvailabilitySlotResponse> addBulkSlots(AuthenticatedUser authenticatedUser, AddBulkSlotsRequest request) {
         String providerId = resolveCurrentProviderId(authenticatedUser);
         List<SlotWindow> slotWindows = request.slots()
@@ -97,6 +111,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public List<AvailabilitySlotResponse> generateRecurringSlots(
             AuthenticatedUser authenticatedUser,
             GenerateRecurringSlotsRequest request) {
@@ -125,6 +144,10 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE,
+            key = "T(java.util.Objects).hash(#providerId, #date, #dateFrom, #dateTo)",
+            condition = "#authenticatedUser == null && (#includeBooked == null || !#includeBooked) && (#includeBlocked == null || !#includeBlocked)")
     public List<AvailabilitySlotResponse> getProviderSlots(
             String providerId,
             LocalDate date,
@@ -171,6 +194,10 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE,
+            key = "#slotId",
+            condition = "#authenticatedUser == null")
     public AvailabilitySlotResponse getSlotById(String slotId, AuthenticatedUser authenticatedUser) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         if (!isAdmin(authenticatedUser) && !isOwner(slot.getProviderId(), authenticatedUser)) {
@@ -183,6 +210,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse updateSlot(String slotId, AuthenticatedUser authenticatedUser, UpdateSlotRequest request) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         assertCanManage(slot, authenticatedUser);
@@ -205,6 +237,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse blockSlot(String slotId, AuthenticatedUser authenticatedUser, BlockSlotRequest request) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         assertCanManage(slot, authenticatedUser);
@@ -220,6 +257,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse unblockSlot(String slotId, AuthenticatedUser authenticatedUser) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         assertCanManage(slot, authenticatedUser);
@@ -235,6 +277,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public void deleteSlot(String slotId, AuthenticatedUser authenticatedUser) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         assertCanManage(slot, authenticatedUser);
@@ -247,6 +294,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse bookSlotInternally(String slotId, InternalSlotBookingRequest request) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         if (slot.isBlocked()) {
@@ -271,6 +323,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse releaseSlotInternally(String slotId) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         if (!slot.isBooked()) {
@@ -289,6 +346,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_PROVIDER_SLOTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_PUBLIC_SLOT_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE, allEntries = true)
+    })
     public AvailabilitySlotResponse completeSlotInternally(String slotId) {
         AvailabilitySlot slot = findSlotOrThrow(slotId);
         if (!slot.isBooked()) {
@@ -314,6 +376,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheConfig.SCHEDULE_INTERNAL_AVAILABLE_SLOTS_CACHE,
+            key = "T(java.util.Objects).hash(#providerId, #date, #dateFrom, #dateTo)")
     public List<AvailabilitySlotResponse> getAvailableSlotsByProviderInternally(
             String providerId,
             LocalDate date,

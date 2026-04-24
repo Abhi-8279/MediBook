@@ -13,6 +13,7 @@ import com.medibook.appointment.enums.AppointmentStatus;
 import com.medibook.appointment.enums.Role;
 import com.medibook.appointment.exception.AppointmentConflictException;
 import com.medibook.appointment.exception.ExternalServiceException;
+import com.medibook.appointment.messaging.NotificationEventPublisher;
 import com.medibook.appointment.exception.ResourceNotFoundException;
 import com.medibook.appointment.config.AppProperties;
 import com.medibook.appointment.repository.AppointmentRepository;
@@ -43,6 +44,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final ProviderServiceGateway providerServiceGateway;
     private final ScheduleServiceGateway scheduleServiceGateway;
     private final PaymentServiceGateway paymentServiceGateway;
+    private final NotificationEventPublisher notificationEventPublisher;
     private final AppProperties appProperties;
     private final Clock clock;
 
@@ -51,12 +53,14 @@ public class AppointmentServiceImpl implements AppointmentService {
             ProviderServiceGateway providerServiceGateway,
             ScheduleServiceGateway scheduleServiceGateway,
             PaymentServiceGateway paymentServiceGateway,
+            NotificationEventPublisher notificationEventPublisher,
             AppProperties appProperties,
             Clock clock) {
         this.appointmentRepository = appointmentRepository;
         this.providerServiceGateway = providerServiceGateway;
         this.scheduleServiceGateway = scheduleServiceGateway;
         this.paymentServiceGateway = paymentServiceGateway;
+        this.notificationEventPublisher = notificationEventPublisher;
         this.appProperties = appProperties;
         this.clock = clock;
     }
@@ -84,7 +88,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         scheduleServiceGateway.bookSlot(slot.slotId(), appointment.getAppointmentId());
         try {
-            return toResponse(appointmentRepository.saveAndFlush(appointment));
+            Appointment saved = appointmentRepository.saveAndFlush(appointment);
+            publishBookedEventQuietly(saved);
+            return toResponse(saved);
         } catch (RuntimeException exception) {
             safeReleaseSlot(slot.slotId());
             throw exception;
@@ -227,6 +233,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         requestRefundQuietly(saved);
+        publishCancelledEventQuietly(saved);
         return toResponse(saved);
     }
 
@@ -263,6 +270,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         try {
             scheduleServiceGateway.releaseSlot(snapshot.slotId());
+            publishRescheduledEventQuietly(appointment, snapshot);
             return toResponse(appointment);
         } catch (RuntimeException exception) {
             snapshot.restore(appointment);
@@ -472,6 +480,34 @@ public class AppointmentServiceImpl implements AppointmentService {
                     appointment.getCancellationReason());
         } catch (ExternalServiceException exception) {
             // Keep appointment cancellation working before payment-service is added.
+        }
+    }
+
+    private void publishBookedEventQuietly(Appointment appointment) {
+        try {
+            notificationEventPublisher.publishBooked(appointment);
+        } catch (RuntimeException ignored) {
+            // Booking must remain available even if notification publishing is temporarily unavailable.
+        }
+    }
+
+    private void publishCancelledEventQuietly(Appointment appointment) {
+        try {
+            notificationEventPublisher.publishCancelled(appointment);
+        } catch (RuntimeException ignored) {
+            // Cancellation must remain available even if notification publishing is temporarily unavailable.
+        }
+    }
+
+    private void publishRescheduledEventQuietly(Appointment appointment, AppointmentSnapshot snapshot) {
+        try {
+            notificationEventPublisher.publishRescheduled(
+                    appointment,
+                    snapshot.appointmentDate(),
+                    snapshot.startTime(),
+                    snapshot.endTime());
+        } catch (RuntimeException ignored) {
+            // Rescheduling must remain available even if notification publishing is temporarily unavailable.
         }
     }
 

@@ -11,6 +11,7 @@ import com.medibook.record.entity.MedicalRecord;
 import com.medibook.record.enums.AppointmentStatus;
 import com.medibook.record.enums.Role;
 import com.medibook.record.exception.ExternalServiceException;
+import com.medibook.record.messaging.NotificationEventPublisher;
 import com.medibook.record.exception.RecordConflictException;
 import com.medibook.record.exception.ResourceNotFoundException;
 import com.medibook.record.repository.RecordRepository;
@@ -43,6 +44,7 @@ public class RecordServiceImpl implements RecordService {
     private final AppointmentServiceGateway appointmentServiceGateway;
     private final ProviderServiceGateway providerServiceGateway;
     private final NotificationServiceGateway notificationServiceGateway;
+    private final NotificationEventPublisher notificationEventPublisher;
     private final AppProperties appProperties;
     private final Clock clock;
 
@@ -51,12 +53,14 @@ public class RecordServiceImpl implements RecordService {
             AppointmentServiceGateway appointmentServiceGateway,
             ProviderServiceGateway providerServiceGateway,
             NotificationServiceGateway notificationServiceGateway,
+            NotificationEventPublisher notificationEventPublisher,
             AppProperties appProperties,
             Clock clock) {
         this.recordRepository = recordRepository;
         this.appointmentServiceGateway = appointmentServiceGateway;
         this.providerServiceGateway = providerServiceGateway;
         this.notificationServiceGateway = notificationServiceGateway;
+        this.notificationEventPublisher = notificationEventPublisher;
         this.appProperties = appProperties;
         this.clock = clock;
     }
@@ -247,19 +251,26 @@ public class RecordServiceImpl implements RecordService {
         }
 
         for (MedicalRecord record : dueRecords) {
+            MedicalRecordReminderPayload payload = new MedicalRecordReminderPayload(
+                    record.getPatientId(),
+                    record.getRecordId(),
+                    record.getAppointmentId(),
+                    record.getProviderId(),
+                    record.getFollowUpDate(),
+                    record.getDiagnosis(),
+                    record.getPrescription());
             try {
-                notificationServiceGateway.sendFollowUpReminder(new MedicalRecordReminderPayload(
-                        record.getPatientId(),
-                        record.getRecordId(),
-                        record.getAppointmentId(),
-                        record.getProviderId(),
-                        record.getFollowUpDate(),
-                        record.getDiagnosis(),
-                        record.getPrescription()));
+                notificationEventPublisher.publishFollowUpReminder(payload);
                 record.setFollowUpReminderSentAt(Instant.now(clock));
                 recordRepository.save(record);
-            } catch (ExternalServiceException exception) {
-                // Keep the reminder eligible for a future retry if notification-service is unavailable.
+            } catch (RuntimeException publishException) {
+                try {
+                    notificationServiceGateway.sendFollowUpReminder(payload);
+                    record.setFollowUpReminderSentAt(Instant.now(clock));
+                    recordRepository.save(record);
+                } catch (ExternalServiceException exception) {
+                    // Keep the reminder eligible for a future retry if notification-service is unavailable.
+                }
             }
         }
     }

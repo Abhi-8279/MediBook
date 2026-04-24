@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medibook.record.config.AppProperties;
 import com.medibook.record.dto.request.CreateMedicalRecordRequest;
 import com.medibook.record.dto.request.UpdateMedicalRecordRequest;
@@ -14,6 +15,8 @@ import com.medibook.record.dto.response.MedicalRecordResponse;
 import com.medibook.record.entity.MedicalRecord;
 import com.medibook.record.enums.AppointmentStatus;
 import com.medibook.record.enums.Role;
+import com.medibook.record.exception.ExternalServiceException;
+import com.medibook.record.messaging.NotificationEventPublisher;
 import com.medibook.record.repository.RecordRepository;
 import com.medibook.record.security.AuthenticatedUser;
 import com.medibook.record.service.impl.RecordServiceImpl;
@@ -30,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class RecordServiceImplTest {
@@ -48,16 +52,19 @@ class RecordServiceImplTest {
     @Mock
     private NotificationServiceGateway notificationServiceGateway;
 
+    private RecordingNotificationEventPublisher notificationEventPublisher;
     private RecordServiceImpl recordService;
 
     @BeforeEach
     void setUp() {
         AppProperties appProperties = new AppProperties();
+        notificationEventPublisher = new RecordingNotificationEventPublisher();
         recordService = new RecordServiceImpl(
                 recordRepository,
                 appointmentServiceGateway,
                 providerServiceGateway,
                 notificationServiceGateway,
+                notificationEventPublisher,
                 appProperties,
                 FIXED_CLOCK);
     }
@@ -165,7 +172,7 @@ class RecordServiceImplTest {
     }
 
     @Test
-    void shouldDispatchDueFollowUpReminderAndMarkRecordAsSent() {
+    void shouldPublishDueFollowUpReminderAndMarkRecordAsSent() {
         MedicalRecord record = record();
         record.setFollowUpDate(LocalDate.of(2026, 4, 22));
         record.setFollowUpReminderSentAt(null);
@@ -176,19 +183,38 @@ class RecordServiceImplTest {
 
         recordService.dispatchDueFollowUpReminders();
 
-        verify(notificationServiceGateway).sendFollowUpReminder(any(MedicalRecordReminderPayload.class));
+        assertThat(notificationEventPublisher.publishedPayload).isNotNull();
+        verify(notificationServiceGateway, never()).sendFollowUpReminder(any(MedicalRecordReminderPayload.class));
         assertThat(record.getFollowUpReminderSentAt()).isEqualTo(Instant.parse("2026-04-22T10:00:00Z"));
     }
 
     @Test
-    void shouldKeepReminderEligibleWhenNotificationDispatchFails() {
+    void shouldFallbackToNotificationServiceWhenEventPublishFails() {
         MedicalRecord record = record();
         record.setFollowUpDate(LocalDate.of(2026, 4, 22));
         record.setFollowUpReminderSentAt(null);
 
         when(recordRepository.findByFollowUpDateAndFollowUpReminderSentAtIsNullOrderByCreatedAtAsc(LocalDate.of(2026, 4, 22)))
                 .thenReturn(List.of(record));
-        org.mockito.Mockito.doThrow(new com.medibook.record.exception.ExternalServiceException("down", new RuntimeException()))
+        notificationEventPublisher.failOnPublish = true;
+        when(recordRepository.save(any(MedicalRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        recordService.dispatchDueFollowUpReminders();
+
+        verify(notificationServiceGateway).sendFollowUpReminder(any(MedicalRecordReminderPayload.class));
+        assertThat(record.getFollowUpReminderSentAt()).isEqualTo(Instant.parse("2026-04-22T10:00:00Z"));
+    }
+
+    @Test
+    void shouldKeepReminderEligibleWhenPublishAndNotificationDispatchFail() {
+        MedicalRecord record = record();
+        record.setFollowUpDate(LocalDate.of(2026, 4, 22));
+        record.setFollowUpReminderSentAt(null);
+
+        when(recordRepository.findByFollowUpDateAndFollowUpReminderSentAtIsNullOrderByCreatedAtAsc(LocalDate.of(2026, 4, 22)))
+                .thenReturn(List.of(record));
+        notificationEventPublisher.failOnPublish = true;
+        org.mockito.Mockito.doThrow(new ExternalServiceException("down", new RuntimeException()))
                 .when(notificationServiceGateway)
                 .sendFollowUpReminder(any(MedicalRecordReminderPayload.class));
 
@@ -223,5 +249,23 @@ class RecordServiceImplTest {
         record.setCreatedAt(Instant.parse("2026-04-22T09:40:00Z"));
         record.setUpdatedAt(Instant.parse("2026-04-22T09:45:00Z"));
         return record;
+    }
+
+    private static final class RecordingNotificationEventPublisher extends NotificationEventPublisher {
+
+        private boolean failOnPublish;
+        private MedicalRecordReminderPayload publishedPayload;
+
+        private RecordingNotificationEventPublisher() {
+            super((RabbitTemplate) null, new ObjectMapper());
+        }
+
+        @Override
+        public void publishFollowUpReminder(MedicalRecordReminderPayload payload) {
+            if (failOnPublish) {
+                throw new RuntimeException("broker down");
+            }
+            this.publishedPayload = payload;
+        }
     }
 }

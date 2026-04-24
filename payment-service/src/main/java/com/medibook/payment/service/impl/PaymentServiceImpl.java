@@ -16,6 +16,7 @@ import com.medibook.payment.enums.AppointmentStatus;
 import com.medibook.payment.enums.PaymentMode;
 import com.medibook.payment.enums.PaymentStatus;
 import com.medibook.payment.enums.Role;
+import com.medibook.payment.messaging.NotificationEventPublisher;
 import com.medibook.payment.exception.PaymentConflictException;
 import com.medibook.payment.exception.ResourceNotFoundException;
 import com.medibook.payment.repository.MonthlyRevenueView;
@@ -52,6 +53,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final AppointmentServiceGateway appointmentServiceGateway;
     private final ProviderServiceGateway providerServiceGateway;
+    private final NotificationEventPublisher notificationEventPublisher;
     private final AppProperties appProperties;
     private final Clock clock;
 
@@ -59,11 +61,13 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentRepository paymentRepository,
             AppointmentServiceGateway appointmentServiceGateway,
             ProviderServiceGateway providerServiceGateway,
+            NotificationEventPublisher notificationEventPublisher,
             AppProperties appProperties,
             Clock clock) {
         this.paymentRepository = paymentRepository;
         this.appointmentServiceGateway = appointmentServiceGateway;
         this.providerServiceGateway = providerServiceGateway;
+        this.notificationEventPublisher = notificationEventPublisher;
         this.appProperties = appProperties;
         this.clock = clock;
     }
@@ -106,7 +110,9 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setRefundedAt(null);
         payment.setNotes(blankToNull(request.notes()));
 
-        return toResponse(paymentRepository.saveAndFlush(payment));
+        Payment saved = paymentRepository.saveAndFlush(payment);
+        publishProcessedEventQuietly(saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -173,7 +179,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
         Payment payment = findPaymentOrThrow(paymentId);
         applyRefund(payment, request == null ? null : request.reason());
-        return toResponse(paymentRepository.saveAndFlush(payment));
+        Payment saved = paymentRepository.saveAndFlush(payment);
+        publishRefundedEventQuietly(saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -189,7 +197,8 @@ public class PaymentServiceImpl implements PaymentService {
             return new MessageResponse("Refund skipped because the payment is not in PAID state");
         }
         applyRefund(payment, request == null ? null : request.reason());
-        paymentRepository.saveAndFlush(payment);
+        Payment saved = paymentRepository.saveAndFlush(payment);
+        publishRefundedEventQuietly(saved);
         return new MessageResponse("Refund processed successfully");
     }
 
@@ -238,7 +247,14 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
 
-        return toResponse(paymentRepository.saveAndFlush(payment));
+        Payment saved = paymentRepository.saveAndFlush(payment);
+        if (saved.getStatus() == PaymentStatus.PAID && previousStatus != PaymentStatus.PAID) {
+            publishProcessedEventQuietly(saved);
+        }
+        if (saved.getStatus() == PaymentStatus.REFUNDED && previousStatus != PaymentStatus.REFUNDED) {
+            publishRefundedEventQuietly(saved);
+        }
+        return toResponse(saved);
     }
 
     @Override
@@ -563,6 +579,22 @@ public class PaymentServiceImpl implements PaymentService {
     private void validateDateRange(LocalDate paidFrom, LocalDate paidTo) {
         if (paidFrom != null && paidTo != null && paidFrom.isAfter(paidTo)) {
             throw new IllegalArgumentException("paidFrom must be on or before paidTo");
+        }
+    }
+
+    private void publishProcessedEventQuietly(Payment payment) {
+        try {
+            notificationEventPublisher.publishProcessed(payment);
+        } catch (RuntimeException ignored) {
+            // Payment processing should remain available even if event publishing is unavailable.
+        }
+    }
+
+    private void publishRefundedEventQuietly(Payment payment) {
+        try {
+            notificationEventPublisher.publishRefunded(payment);
+        } catch (RuntimeException ignored) {
+            // Refund processing should remain available even if event publishing is unavailable.
         }
     }
 

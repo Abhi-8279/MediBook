@@ -12,6 +12,7 @@ import com.medibook.provider.entity.Provider;
 import com.medibook.provider.enums.Role;
 import com.medibook.provider.exception.DuplicateResourceException;
 import com.medibook.provider.exception.ResourceNotFoundException;
+import com.medibook.provider.config.CacheConfig;
 import com.medibook.provider.repository.ProviderRepository;
 import com.medibook.provider.security.AuthenticatedUser;
 import com.medibook.provider.service.AuthServiceGateway;
@@ -22,6 +23,9 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +44,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse registerProvider(AuthenticatedUser authenticatedUser, RegisterProviderRequest request) {
         if (providerRepository.existsByUserId(authenticatedUser.userId())) {
             throw new DuplicateResourceException("A provider profile already exists for this user");
@@ -67,6 +76,10 @@ public class ProviderServiceImpl implements ProviderService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE,
+            key = "T(java.util.Objects).hash(#search, #specialization, #location, #available, #verified)",
+            condition = "#authenticatedUser == null")
     public List<ProviderSummaryResponse> searchProviders(
             String search,
             String specialization,
@@ -88,6 +101,10 @@ public class ProviderServiceImpl implements ProviderService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE,
+            key = "#providerId",
+            condition = "#authenticatedUser == null")
     public ProviderResponse getProviderById(String providerId, AuthenticatedUser authenticatedUser) {
         Provider provider = findProviderOrThrow(providerId);
         if (!provider.isVerified() && !canAccessUnverifiedProfile(provider, authenticatedUser)) {
@@ -103,6 +120,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse syncAuthProfile(AuthenticatedUser authenticatedUser) {
         Provider provider = findProviderByUserIdOrThrow(authenticatedUser.userId());
         AuthUserSummary authUser = authServiceGateway.getUserById(authenticatedUser.userId());
@@ -112,6 +134,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse updateMyProviderProfile(AuthenticatedUser authenticatedUser, UpdateProviderRequest request) {
         Provider provider = findProviderByUserIdOrThrow(authenticatedUser.userId());
 
@@ -138,6 +165,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse verifyProvider(String providerId, ProviderVerificationRequest request) {
         Provider provider = findProviderOrThrow(providerId);
         provider.setVerified(Boolean.TRUE.equals(request.verified()));
@@ -153,6 +185,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse updateAvailability(
             String providerId,
             AuthenticatedUser authenticatedUser,
@@ -166,6 +203,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse updateAvailabilityInternally(String providerId, ProviderAvailabilityUpdateRequest request) {
         Provider provider = findProviderOrThrow(providerId);
         provider.setAvailable(Boolean.TRUE.equals(request.available()));
@@ -173,6 +215,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public ProviderResponse updateRating(String providerId, ProviderRatingUpdateRequest request) {
         Provider provider = findProviderOrThrow(providerId);
         provider.setAvgRating(normalizeRating(request.avgRating()));
@@ -188,6 +235,7 @@ public class ProviderServiceImpl implements ProviderService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE)
     public List<SpecializationCountResponse> getSpecializationCounts() {
         return providerRepository.countVerifiedProvidersBySpecialization()
                 .stream()
@@ -196,6 +244,11 @@ public class ProviderServiceImpl implements ProviderService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_SEARCH_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_PUBLIC_DETAIL_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.PROVIDER_SPECIALIZATION_COUNT_CACHE, allEntries = true)
+    })
     public void deleteProvider(String providerId) {
         Provider provider = findProviderOrThrow(providerId);
         providerRepository.delete(provider);

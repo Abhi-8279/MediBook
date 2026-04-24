@@ -3,10 +3,10 @@ package com.medibook.payment.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medibook.payment.config.AppProperties;
 import com.medibook.payment.dto.request.ProcessPaymentRequest;
 import com.medibook.payment.dto.request.RefundPaymentRequest;
@@ -20,7 +20,7 @@ import com.medibook.payment.enums.AppointmentStatus;
 import com.medibook.payment.enums.PaymentMode;
 import com.medibook.payment.enums.PaymentStatus;
 import com.medibook.payment.enums.Role;
-import com.medibook.payment.repository.MonthlyRevenueView;
+import com.medibook.payment.messaging.NotificationEventPublisher;
 import com.medibook.payment.repository.PaymentRepository;
 import com.medibook.payment.security.AuthenticatedUser;
 import com.medibook.payment.service.impl.PaymentServiceImpl;
@@ -38,6 +38,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceImplTest {
@@ -53,15 +54,18 @@ class PaymentServiceImplTest {
     @Mock
     private ProviderServiceGateway providerServiceGateway;
 
+    private RecordingNotificationEventPublisher notificationEventPublisher;
     private PaymentServiceImpl paymentService;
 
     @BeforeEach
     void setUp() {
         AppProperties appProperties = new AppProperties();
+        notificationEventPublisher = new RecordingNotificationEventPublisher();
         paymentService = new PaymentServiceImpl(
                 paymentRepository,
                 appointmentServiceGateway,
                 providerServiceGateway,
+                notificationEventPublisher,
                 appProperties,
                 FIXED_CLOCK);
     }
@@ -95,6 +99,7 @@ class PaymentServiceImplTest {
         assertThat(saved.getPaidAt()).isEqualTo(Instant.parse("2026-04-22T10:00:00Z"));
         assertThat(saved.getTransactionId()).startsWith("TXN-UPI-");
         assertThat(response.status()).isEqualTo(PaymentStatus.PAID);
+        assertThat(notificationEventPublisher.processedPayment).isSameAs(saved);
     }
 
     @Test
@@ -135,6 +140,7 @@ class PaymentServiceImplTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
         assertThat(payment.getRefundedAt()).isEqualTo(Instant.parse("2026-04-22T10:00:00Z"));
         assertThat(payment.getNotes()).contains("Cancelled by patient");
+        assertThat(notificationEventPublisher.refundedPayment).isSameAs(payment);
     }
 
     @Test
@@ -312,5 +318,25 @@ class PaymentServiceImplTest {
         payment.setUpdatedAt(Instant.parse("2026-04-20T09:00:00Z"));
         payment.setNotes("Refunded payment");
         return payment;
+    }
+
+    private static final class RecordingNotificationEventPublisher extends NotificationEventPublisher {
+
+        private Payment processedPayment;
+        private Payment refundedPayment;
+
+        private RecordingNotificationEventPublisher() {
+            super((RabbitTemplate) null, new ObjectMapper());
+        }
+
+        @Override
+        public void publishProcessed(Payment payment) {
+            this.processedPayment = payment;
+        }
+
+        @Override
+        public void publishRefunded(Payment payment) {
+            this.refundedPayment = payment;
+        }
     }
 }
