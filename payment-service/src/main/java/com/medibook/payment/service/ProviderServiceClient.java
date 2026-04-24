@@ -1,0 +1,57 @@
+package com.medibook.payment.service;
+
+import com.medibook.payment.config.AppProperties;
+import com.medibook.payment.exception.ExternalServiceException;
+import com.medibook.payment.exception.ResourceNotFoundException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
+
+@Component
+public class ProviderServiceClient implements ProviderServiceGateway {
+
+    private final RestTemplate restTemplate;
+    private final AppProperties appProperties;
+
+    public ProviderServiceClient(RestTemplate restTemplate, AppProperties appProperties) {
+        this.restTemplate = restTemplate;
+        this.appProperties = appProperties;
+    }
+
+    @Override
+    public ProviderSummary getProviderByUserId(String userId) {
+        HttpEntity<Void> entity = new HttpEntity<>(createInternalHeaders());
+        try {
+            ResponseEntity<ProviderSummary> response = restTemplate.exchange(
+                    providerServiceBaseUrl() + "/api/v1/providers/internal/users/" + userId,
+                    HttpMethod.GET,
+                    entity,
+                    ProviderSummary.class);
+            if (response.getBody() == null) {
+                throw new ResourceNotFoundException("Provider profile not found");
+            }
+            return response.getBody();
+        } catch (HttpStatusCodeException exception) {
+            if (exception.getStatusCode().value() == 404) {
+                throw new ResourceNotFoundException("Provider profile not found");
+            }
+            throw new ExternalServiceException("Provider service failed while fetching the provider profile", exception);
+        } catch (ResourceAccessException exception) {
+            throw new ExternalServiceException("Provider service is currently unreachable", exception);
+        }
+    }
+
+    private org.springframework.http.HttpHeaders createInternalHeaders() {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set(appProperties.getInternal().getHeaderName(), appProperties.getInternal().getApiKey());
+        return headers;
+    }
+
+    private String providerServiceBaseUrl() {
+        return appProperties.getProviderService().getBaseUrl().replaceAll("/+$", "");
+    }
+}
