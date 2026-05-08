@@ -15,6 +15,8 @@ public class AppProperties {
     private final OAuth2 oauth2 = new OAuth2();
     private final Admin admin = new Admin();
     private final Internal internal = new Internal();
+    private final NotificationService notificationService = new NotificationService();
+    private final PasswordReset passwordReset = new PasswordReset();
 
     public Jwt getJwt() {
         return jwt;
@@ -30,6 +32,14 @@ public class AppProperties {
 
     public Internal getInternal() {
         return internal;
+    }
+
+    public NotificationService getNotificationService() {
+        return notificationService;
+    }
+
+    public PasswordReset getPasswordReset() {
+        return passwordReset;
     }
 
     public static class Jwt {
@@ -66,6 +76,7 @@ public class AppProperties {
     public static class OAuth2 {
         @NotEmpty
         private List<String> authorizedRedirectUris = new ArrayList<>();
+        private final Google google = new Google();
 
         public List<String> getAuthorizedRedirectUris() {
             return authorizedRedirectUris;
@@ -73,6 +84,40 @@ public class AppProperties {
 
         public void setAuthorizedRedirectUris(List<String> authorizedRedirectUris) {
             this.authorizedRedirectUris = authorizedRedirectUris;
+        }
+
+        public Google getGoogle() {
+            return google;
+        }
+    }
+
+    public static class Google {
+        private String clientId;
+        private String clientSecret;
+        private String redirectUri;
+
+        public String getClientId() {
+            return clientId;
+        }
+
+        public void setClientId(String clientId) {
+            this.clientId = clientId;
+        }
+
+        public String getClientSecret() {
+            return clientSecret;
+        }
+
+        public void setClientSecret(String clientSecret) {
+            this.clientSecret = clientSecret;
+        }
+
+        public String getRedirectUri() {
+            return redirectUri;
+        }
+
+        public void setRedirectUri(String redirectUri) {
+            this.redirectUri = redirectUri;
         }
     }
 
@@ -129,6 +174,59 @@ public class AppProperties {
 
         public void setHeaderName(String headerName) {
             this.headerName = headerName;
+        }
+    }
+
+    public static class NotificationService {
+        @NotBlank
+        private String baseUrl = "http://localhost:8087";
+        private int connectTimeoutMs = 3000;
+        private int readTimeoutMs = 5000;
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public int getConnectTimeoutMs() {
+            return connectTimeoutMs;
+        }
+
+        public void setConnectTimeoutMs(int connectTimeoutMs) {
+            this.connectTimeoutMs = connectTimeoutMs;
+        }
+
+        public int getReadTimeoutMs() {
+            return readTimeoutMs;
+        }
+
+        public void setReadTimeoutMs(int readTimeoutMs) {
+            this.readTimeoutMs = readTimeoutMs;
+        }
+    }
+
+    public static class PasswordReset {
+        @NotBlank
+        private String frontendBaseUrl = "http://localhost:5173/reset-password";
+        private long expirationMs = 1_800_000;
+
+        public String getFrontendBaseUrl() {
+            return frontendBaseUrl;
+        }
+
+        public void setFrontendBaseUrl(String frontendBaseUrl) {
+            this.frontendBaseUrl = frontendBaseUrl;
+        }
+
+        public long getExpirationMs() {
+            return expirationMs;
+        }
+
+        public void setExpirationMs(long expirationMs) {
+            this.expirationMs = expirationMs;
         }
     }
 }

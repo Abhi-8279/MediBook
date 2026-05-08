@@ -1,8 +1,12 @@
 package com.medibook.payment.service;
 
+import com.medibook.payment.dto.request.CreateCheckoutOrderRequest;
+import com.medibook.payment.dto.request.MarkCheckoutPaymentFailedRequest;
 import com.medibook.payment.dto.request.ProcessPaymentRequest;
 import com.medibook.payment.dto.request.RefundPaymentRequest;
 import com.medibook.payment.dto.request.UpdatePaymentStatusRequest;
+import com.medibook.payment.dto.request.VerifyCheckoutPaymentRequest;
+import com.medibook.payment.dto.response.CheckoutOrderResponse;
 import com.medibook.payment.dto.response.InvoiceResponse;
 import com.medibook.payment.dto.response.MessageResponse;
 import com.medibook.payment.dto.response.PaymentResponse;
@@ -18,6 +22,12 @@ import java.util.List;
 public interface PaymentService {
 
     PaymentResponse processPayment(AuthenticatedUser authenticatedUser, ProcessPaymentRequest request);
+
+    CheckoutOrderResponse createCheckoutOrder(AuthenticatedUser authenticatedUser, CreateCheckoutOrderRequest request);
+
+    PaymentResponse verifyCheckoutPayment(AuthenticatedUser authenticatedUser, VerifyCheckoutPaymentRequest request);
+
+    PaymentResponse markCheckoutPaymentFailed(AuthenticatedUser authenticatedUser, MarkCheckoutPaymentFailedRequest request);
 
     PaymentResponse getPaymentByAppointment(String appointmentId, AuthenticatedUser authenticatedUser);
 

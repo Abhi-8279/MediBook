@@ -15,6 +15,12 @@ public class GatewayRoutesConfig {
                 .route("auth-service", route -> route
                         .path("/api/v1/auth/**")
                         .uri(routeUri(properties.getAuth())))
+                .route("auth-service-oauth-start", route -> route
+                        .path("/oauth2/**")
+                        .uri(routeUri(properties.getAuth())))
+                .route("auth-service-oauth-callback", route -> route
+                        .path("/login/oauth2/**")
+                        .uri(routeUri(properties.getAuth())))
                 .route("provider-service", route -> route
                         .path("/api/v1/providers/**")
                         .uri(routeUri(properties.getProvider())))

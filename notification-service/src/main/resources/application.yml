@@ -5,16 +5,22 @@ spring:
   application:
     name: notification-service
   mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    host: smtp.gmail.com
+    port: 587
+    username: "abhishek.gupta_cs22@gla.ac.in"
+    password: "vacd ykjq fada kqli"
     properties:
       mail:
         smtp:
-          auth: ${MAIL_SMTP_AUTH:false}
+          auth: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+          ssl:
+            trust: smtp.gmail.com
           starttls:
-            enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
+            enable: true
+            required: true
   datasource:
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/medibook_notification?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${MYSQL_USERNAME:root}
@@ -33,6 +39,9 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        auto-startup: ${RABBIT_LISTENERS_AUTO_STARTUP:true}
   jackson:
     default-property-inclusion: non_null
 
@@ -56,6 +65,8 @@ management:
   health:
     mail:
       enabled: false
+    rabbit:
+      enabled: ${RABBIT_HEALTH_ENABLED:false}
   endpoint:
     health:
       show-details: when_authorized
@@ -73,8 +84,8 @@ app:
     api-key: ${INTERNAL_API_KEY:medibook-internal-key-change-me}
     header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
   email:
-    enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
-    from-address: ${NOTIFICATION_EMAIL_FROM:no-reply@medibook.local}
+    enabled: true
+    from-address: "abhishek.gupta_cs22@gla.ac.in"
   sms:
     enabled: ${NOTIFICATION_SMS_ENABLED:false}
     provider-url: ${NOTIFICATION_SMS_PROVIDER_URL:}

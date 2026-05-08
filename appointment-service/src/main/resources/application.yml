@@ -42,6 +42,9 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    rabbit:
+      enabled: ${RABBIT_HEALTH_ENABLED:false}
   endpoint:
     health:
       show-details: when_authorized
@@ -67,6 +70,10 @@ app:
     base-url: ${PAYMENT_SERVICE_URL:http://localhost:8085}
     connect-timeout-ms: ${PAYMENT_SERVICE_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${PAYMENT_SERVICE_READ_TIMEOUT_MS:5000}
+  notification-service:
+    base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
+    connect-timeout-ms: ${NOTIFICATION_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${NOTIFICATION_SERVICE_READ_TIMEOUT_MS:5000}
   cancellation:
     refund-notice-hours: ${APPOINTMENT_REFUND_NOTICE_HOURS:24}
   internal:

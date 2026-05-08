@@ -2,13 +2,16 @@ package com.medibook.auth.config;
 
 import com.medibook.auth.repository.UserRepository;
 import com.medibook.auth.security.CustomOAuth2UserService;
+import com.medibook.auth.security.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.medibook.auth.security.InternalServiceAuthenticationFilter;
 import com.medibook.auth.security.JwtAuthenticationFilter;
+import com.medibook.auth.security.OAuth2AuthenticationFailureHandler;
 import com.medibook.auth.security.OAuth2AuthenticationSuccessHandler;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -16,6 +19,7 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -25,6 +29,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -38,9 +43,13 @@ public class SecurityConfig {
             JwtAuthenticationFilter jwtAuthenticationFilter,
             AuthenticationProvider authenticationProvider,
             CustomOAuth2UserService customOAuth2UserService,
+            HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository,
+            OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler,
             OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
             ObjectProvider<ClientRegistrationRepository> clientRegistrationRepositoryProvider) throws Exception {
-        http.csrf(csrf -> csrf.disable())
+        http.csrf(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
@@ -48,6 +57,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/validate")
                         .permitAll()
@@ -71,9 +82,15 @@ public class SecurityConfig {
 
         if (clientRegistrationRepositoryProvider.getIfAvailable() != null) {
             http.oauth2Login(oauth -> oauth
+                    .authorizationEndpoint(authorization -> authorization
+                            .authorizationRequestRepository(authorizationRequestRepository))
                     .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
-                    .successHandler(oAuth2AuthenticationSuccessHandler));
+                    .successHandler(oAuth2AuthenticationSuccessHandler)
+                    .failureHandler(oAuth2AuthenticationFailureHandler));
         }
+
+        http.exceptionHandling(exception -> exception
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
 
         return http.build();
     }

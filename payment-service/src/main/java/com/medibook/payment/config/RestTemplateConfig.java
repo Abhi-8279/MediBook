@@ -14,12 +14,16 @@ public class RestTemplateConfig {
                 appProperties.getAuthService().getConnectTimeoutMs(),
                 Math.max(
                         appProperties.getAppointmentService().getConnectTimeoutMs(),
-                        appProperties.getProviderService().getConnectTimeoutMs()));
+                        Math.max(
+                                appProperties.getProviderService().getConnectTimeoutMs(),
+                                appProperties.getPayment().getRazorpay().getConnectTimeoutMs())));
         int readTimeout = Math.max(
                 appProperties.getAuthService().getReadTimeoutMs(),
                 Math.max(
                         appProperties.getAppointmentService().getReadTimeoutMs(),
-                        appProperties.getProviderService().getReadTimeoutMs()));
+                        Math.max(
+                                appProperties.getProviderService().getReadTimeoutMs(),
+                                appProperties.getPayment().getRazorpay().getReadTimeoutMs())));
 
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeout);

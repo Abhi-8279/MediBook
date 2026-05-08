@@ -1,6 +1,11 @@
 package com.medibook.notification.service.impl;
 
+import com.medibook.notification.config.AppProperties;
 import com.medibook.notification.dto.request.FollowUpReminderRequest;
+import com.medibook.notification.dto.request.SendAppointmentBookedNotificationRequest;
+import com.medibook.notification.dto.request.SendAppointmentCancelledNotificationRequest;
+import com.medibook.notification.dto.request.SendAppointmentRescheduledNotificationRequest;
+import com.medibook.notification.dto.request.SendDirectEmailRequest;
 import com.medibook.notification.dto.request.ScheduleAppointmentRemindersRequest;
 import com.medibook.notification.dto.request.SendBulkNotificationRequest;
 import com.medibook.notification.dto.request.SendNotificationRequest;
@@ -27,6 +32,7 @@ import com.medibook.notification.service.SmsSender;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,10 +48,17 @@ import org.springframework.util.StringUtils;
 public class NotificationServiceImpl implements NotificationService {
 
     private static final DateTimeFormatter FOLLOW_UP_DATE_FORMAT = DateTimeFormatter.ofPattern("dd MMM uuuu");
+    private static final DateTimeFormatter APPOINTMENT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd MMM uuuu");
+    private static final DateTimeFormatter APPOINTMENT_TIME_FORMAT = DateTimeFormatter.ofPattern("hh:mm a");
+    private static final List<NotificationChannel> DEFAULT_PATIENT_CHANNELS =
+            List.of(NotificationChannel.APP, NotificationChannel.EMAIL);
+    private static final List<NotificationChannel> DEFAULT_PROVIDER_CHANNELS =
+            List.of(NotificationChannel.APP, NotificationChannel.EMAIL);
 
     private final NotificationRepository notificationRepository;
     private final NotificationScheduleRepository notificationScheduleRepository;
     private final AuthServiceGateway authServiceGateway;
+    private final AppProperties appProperties;
     private final EmailSender emailSender;
     private final SmsSender smsSender;
     private final Clock clock;
@@ -54,12 +67,14 @@ public class NotificationServiceImpl implements NotificationService {
             NotificationRepository notificationRepository,
             NotificationScheduleRepository notificationScheduleRepository,
             AuthServiceGateway authServiceGateway,
+            AppProperties appProperties,
             EmailSender emailSender,
             SmsSender smsSender,
             Clock clock) {
         this.notificationRepository = notificationRepository;
         this.notificationScheduleRepository = notificationScheduleRepository;
         this.authServiceGateway = authServiceGateway;
+        this.appProperties = appProperties;
         this.emailSender = emailSender;
         this.smsSender = smsSender;
         this.clock = clock;
@@ -88,6 +103,116 @@ public class NotificationServiceImpl implements NotificationService {
         List<Notification> savedNotifications = notificationRepository.saveAll(notifications);
         savedNotifications.forEach(notification -> dispatchByChannel(notification, recipient));
         return savedNotifications.stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public MessageResponse sendDirectEmail(SendDirectEmailRequest request) {
+        if (!appProperties.getEmail().isEnabled()) {
+            throw new IllegalStateException(
+                    "SMTP email delivery is disabled. Set NOTIFICATION_EMAIL_ENABLED=true and configure MAIL_* settings.");
+        }
+
+        emailSender.send(
+                normalizeRequired(request.toEmail(), "Recipient email is required"),
+                normalizeRequired(request.subject(), "Subject is required"),
+                normalizeRequired(request.message(), "Message is required"));
+        return new MessageResponse("Email sent successfully");
+    }
+
+    @Override
+    public void sendAppointmentBookedNotifications(SendAppointmentBookedNotificationRequest request) {
+        String appointmentWindow = formatAppointmentWindow(
+                request.appointmentDate(),
+                request.startTime(),
+                request.endTime());
+        send(new SendNotificationRequest(
+                request.patientId(),
+                NotificationType.BOOKING,
+                "Appointment confirmed",
+                "Your " + request.serviceType() + " appointment is confirmed for " + appointmentWindow + ".",
+                DEFAULT_PATIENT_CHANNELS,
+                request.appointmentId(),
+                "APPOINTMENT"));
+        send(new SendNotificationRequest(
+                request.providerId(),
+                NotificationType.BOOKING,
+                "New appointment booked",
+                "A patient has booked your " + request.serviceType() + " appointment for " + appointmentWindow + ".",
+                DEFAULT_PROVIDER_CHANNELS,
+                request.appointmentId(),
+                "APPOINTMENT"));
+        schedulePatientAppointmentReminders(
+                request.patientId(),
+                request.appointmentId(),
+                request.providerId(),
+                "Appointment reminder",
+                "Reminder: you have an appointment scheduled for " + appointmentWindow + ".",
+                request.appointmentDate(),
+                request.startTime());
+    }
+
+    @Override
+    public void sendAppointmentCancelledNotifications(SendAppointmentCancelledNotificationRequest request) {
+        String appointmentWindow = formatAppointmentWindow(
+                request.appointmentDate(),
+                request.startTime(),
+                request.endTime());
+        String reasonSuffix = StringUtils.hasText(request.cancellationReason())
+                ? " Reason: " + request.cancellationReason().trim() + "."
+                : "";
+        cancelScheduledAppointmentReminders(request.appointmentId());
+        send(new SendNotificationRequest(
+                request.patientId(),
+                NotificationType.CANCELLATION,
+                "Appointment cancelled",
+                "Your appointment scheduled for " + appointmentWindow + " has been cancelled." + reasonSuffix,
+                DEFAULT_PATIENT_CHANNELS,
+                request.appointmentId(),
+                "APPOINTMENT"));
+        send(new SendNotificationRequest(
+                request.providerId(),
+                NotificationType.CANCELLATION,
+                "Appointment cancelled",
+                "An appointment scheduled for " + appointmentWindow + " has been cancelled." + reasonSuffix,
+                DEFAULT_PROVIDER_CHANNELS,
+                request.appointmentId(),
+                "APPOINTMENT"));
+    }
+
+    @Override
+    public void sendAppointmentRescheduledNotifications(SendAppointmentRescheduledNotificationRequest request) {
+        String previousWindow = formatAppointmentWindow(
+                request.previousAppointmentDate(),
+                request.previousStartTime(),
+                request.previousEndTime());
+        String newWindow = formatAppointmentWindow(
+                request.appointmentDate(),
+                request.startTime(),
+                request.endTime());
+        send(new SendNotificationRequest(
+                request.patientId(),
+                NotificationType.BOOKING,
+                "Appointment rescheduled",
+                "Your appointment has been moved from " + previousWindow + " to " + newWindow + ".",
+                DEFAULT_PATIENT_CHANNELS,
+                request.appointmentId(),
+                "APPOINTMENT"));
+        send(new SendNotificationRequest(
+                request.providerId(),
+                NotificationType.BOOKING,
+                "Appointment rescheduled",
+                "A patient's appointment has been moved from " + previousWindow + " to " + newWindow + ".",
+                DEFAULT_PROVIDER_CHANNELS,
+                request.appointmentId(),
+                "APPOINTMENT"));
+        schedulePatientAppointmentReminders(
+                request.patientId(),
+                request.appointmentId(),
+                request.providerId(),
+                "Appointment reminder",
+                "Reminder: you have a rescheduled " + request.serviceType() + " appointment on " + newWindow + ".",
+                request.appointmentDate(),
+                request.startTime());
     }
 
     @Override
@@ -350,6 +475,34 @@ public class NotificationServiceImpl implements NotificationService {
         return authServiceGateway.getUsers(role).stream()
                 .filter(AuthUserSummary::active)
                 .toList();
+    }
+
+    private void schedulePatientAppointmentReminders(
+            String recipientId,
+            String appointmentId,
+            String providerId,
+            String title,
+            String message,
+            LocalDate appointmentDate,
+            java.time.LocalTime startTime) {
+        Instant appointmentStartAt = LocalDateTime.of(appointmentDate, startTime).toInstant(java.time.ZoneOffset.UTC);
+        scheduleAppointmentReminders(new ScheduleAppointmentRemindersRequest(
+                recipientId,
+                appointmentId,
+                providerId,
+                title,
+                message,
+                DEFAULT_PATIENT_CHANNELS,
+                appointmentStartAt.minusSeconds(24 * 60 * 60),
+                appointmentStartAt.minusSeconds(60 * 60)));
+    }
+
+    private String formatAppointmentWindow(LocalDate date, java.time.LocalTime startTime, java.time.LocalTime endTime) {
+        return date.format(APPOINTMENT_DATE_FORMAT)
+                + " from "
+                + startTime.format(APPOINTMENT_TIME_FORMAT)
+                + " to "
+                + endTime.format(APPOINTMENT_TIME_FORMAT);
     }
 
     private String buildFollowUpMessage(LocalDate followUpDate, String diagnosis, String prescription) {

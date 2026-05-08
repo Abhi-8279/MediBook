@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Map;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -22,10 +21,15 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final AppProperties appProperties;
     private final AuthService authService;
+    private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
 
-    public OAuth2AuthenticationSuccessHandler(AppProperties appProperties, AuthService authService) {
+    public OAuth2AuthenticationSuccessHandler(
+            AppProperties appProperties,
+            AuthService authService,
+            HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository) {
         this.appProperties = appProperties;
         this.authService = authService;
+        this.authorizationRequestRepository = authorizationRequestRepository;
     }
 
     @Override
@@ -33,21 +37,35 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             HttpServletRequest request,
             HttpServletResponse response,
             Authentication authentication) throws IOException, ServletException {
-        OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
-        String registrationId = ((OAuth2AuthenticationToken) authentication).getAuthorizedClientRegistrationId();
-        AuthProvider provider = "github".equalsIgnoreCase(registrationId) ? AuthProvider.GITHUB : AuthProvider.GOOGLE;
-        AuthResponse authResponse = authService.handleOAuthLogin(provider, oauth2User.getAttributes());
+        try {
+            OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+            String registrationId = ((OAuth2AuthenticationToken) authentication).getAuthorizedClientRegistrationId();
+            AuthProvider provider = "github".equalsIgnoreCase(registrationId) ? AuthProvider.GITHUB : AuthProvider.GOOGLE;
+            AuthResponse authResponse = authService.handleOAuthLogin(
+                    provider,
+                    authorizationRequestRepository.loadRequestedRole(request),
+                    oauth2User.getAttributes());
 
-        String redirectUri = appProperties.getOauth2().getAuthorizedRedirectUris().getFirst();
-        String targetUrl = UriComponentsBuilder.fromUri(URI.create(redirectUri))
-                .queryParam("accessToken", authResponse.accessToken())
-                .queryParam("refreshToken", authResponse.refreshToken())
-                .queryParam("userId", authResponse.user().userId())
-                .queryParam("role", authResponse.user().role())
-                .build()
-                .toUriString();
+            String redirectUri = appProperties.getOauth2().getAuthorizedRedirectUris().getFirst();
+            String targetUrl = UriComponentsBuilder.fromUri(URI.create(redirectUri))
+                    .queryParam("accessToken", authResponse.accessToken())
+                    .queryParam("refreshToken", authResponse.refreshToken())
+                    .queryParam("userId", authResponse.user().userId())
+                    .queryParam("role", authResponse.user().role())
+                    .build()
+                    .toUriString();
 
-        clearAuthenticationAttributes(request);
-        getRedirectStrategy().sendRedirect(request, response, targetUrl);
+            clearAuthenticationAttributes(request);
+            authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+            getRedirectStrategy().sendRedirect(request, response, targetUrl);
+        } catch (Exception exception) {
+            authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+            String targetUrl = UriComponentsBuilder
+                    .fromUri(URI.create(appProperties.getOauth2().getAuthorizedRedirectUris().getFirst()))
+                    .queryParam("error", exception.getMessage())
+                    .build()
+                    .toUriString();
+            getRedirectStrategy().sendRedirect(request, response, targetUrl);
+        }
     }
 }

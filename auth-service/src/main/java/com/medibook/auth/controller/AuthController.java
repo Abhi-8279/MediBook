@@ -2,9 +2,11 @@ package com.medibook.auth.controller;
 
 import com.medibook.auth.dto.request.ChangePasswordRequest;
 import com.medibook.auth.dto.request.DeactivateAccountRequest;
+import com.medibook.auth.dto.request.ForgotPasswordRequest;
 import com.medibook.auth.dto.request.LoginRequest;
 import com.medibook.auth.dto.request.RefreshTokenRequest;
 import com.medibook.auth.dto.request.RegisterRequest;
+import com.medibook.auth.dto.request.ResetPasswordRequest;
 import com.medibook.auth.dto.request.UpdateProfileRequest;
 import com.medibook.auth.dto.request.ValidateTokenRequest;
 import com.medibook.auth.dto.response.AuthResponse;
@@ -43,6 +45,16 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(authService.requestPasswordReset(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(authService.resetPassword(request));
     }
 
     @PostMapping("/refresh")

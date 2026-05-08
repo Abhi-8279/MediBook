@@ -42,6 +42,9 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    rabbit:
+      enabled: ${RABBIT_HEALTH_ENABLED:false}
   endpoint:
     health:
       show-details: when_authorized
@@ -68,3 +71,13 @@ app:
     header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
   payment:
     default-currency: ${PAYMENT_DEFAULT_CURRENCY:INR}
+    razorpay:
+      enabled: ${RAZORPAY_ENABLED:true}
+      key-id: ${RAZORPAY_KEY_ID:rzp_test_SjzEMHV8QnBYi8}
+      key-secret: ${RAZORPAY_KEY_SECRET:hpt5cU45U4E8DQ8D56dgc8qz}
+      api-base-url: ${RAZORPAY_API_BASE_URL:https://api.razorpay.com/v1}
+      connect-timeout-ms: ${RAZORPAY_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${RAZORPAY_READ_TIMEOUT_MS:10000}
+      checkout-name: ${RAZORPAY_CHECKOUT_NAME:MediBook}
+      checkout-description: ${RAZORPAY_CHECKOUT_DESCRIPTION:Appointment payment}
+      checkout-image-url: ${RAZORPAY_CHECKOUT_IMAGE_URL:}

@@ -19,6 +19,8 @@ This service implements the MediBook case-study auth domain using Java, Spring B
 
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/validate`
@@ -42,16 +44,27 @@ Set these environment variables if you do not want the defaults from `applicatio
 - `MYSQL_PASSWORD`
 - `EUREKA_SERVER_URL`
 - `JWT_SECRET`
+- `NOTIFICATION_SERVICE_URL`
+- `PASSWORD_RESET_FRONTEND_BASE_URL`
+- `PASSWORD_RESET_EXPIRATION_MS`
 - `INTERNAL_API_KEY`
 - `INTERNAL_API_KEY_HEADER`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `GITHUB_CLIENT_ID`
-- `GITHUB_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
 - `OAUTH2_REDIRECT_URI`
 
-OAuth2 is optional for local startup. If you want Google/GitHub login, copy `src/main/resources/application-oauth.yml.example`
-to your own config source and provide the required client IDs and secrets.
+OAuth2 is optional for local startup. Google login turns on automatically when `GOOGLE_CLIENT_ID`
+and `GOOGLE_CLIENT_SECRET` are set, or when you fill those values in
+`src/main/resources/application-oauth.yml`.
+
+Recommended local values:
+
+- `GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8080/login/oauth2/code/google`
+- `OAUTH2_REDIRECT_URI=http://localhost:5173/oauth2/redirect`
+
+`src/main/resources/application-oauth.yml` is imported automatically when present, so you can keep
+your local Google OAuth values there without needing an extra Spring profile.
 
 Build and run with the local Maven tool downloaded into the repo:
 

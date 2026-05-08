@@ -2,6 +2,8 @@ server:
   port: ${SERVER_PORT:8081}
 
 spring:
+  config:
+    import: optional:classpath:application-oauth.yml
   application:
     name: auth-service
   datasource:
@@ -52,7 +54,11 @@ app:
     refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
   oauth2:
     authorized-redirect-uris:
-      - ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/redirect}
+      - ${OAUTH2_REDIRECT_URI:http://localhost:5173/oauth2/redirect}
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:http://localhost:8080/login/oauth2/code/google}
   admin:
     email: ${ADMIN_EMAIL:admin@medibook.com}
     password: ${ADMIN_PASSWORD:Admin@12345}
@@ -60,3 +66,10 @@ app:
   internal:
     api-key: ${INTERNAL_API_KEY:medibook-internal-key-change-me}
     header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
+  notification-service:
+    base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
+    connect-timeout-ms: ${NOTIFICATION_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${NOTIFICATION_SERVICE_READ_TIMEOUT_MS:5000}
+  password-reset:
+    expiration-ms: ${PASSWORD_RESET_EXPIRATION_MS:1800000}
+    frontend-base-url: ${PASSWORD_RESET_FRONTEND_BASE_URL:http://localhost:5173/reset-password}

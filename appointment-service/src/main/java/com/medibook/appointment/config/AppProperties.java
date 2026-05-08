@@ -13,6 +13,7 @@ public class AppProperties {
     private final DownstreamService providerService = new DownstreamService();
     private final DownstreamService scheduleService = new DownstreamService();
     private final DownstreamService paymentService = new DownstreamService();
+    private final DownstreamService notificationService = new DownstreamService();
     private final Internal internal = new Internal();
     private final Cancellation cancellation = new Cancellation();
 
@@ -30,6 +31,10 @@ public class AppProperties {
 
     public DownstreamService getPaymentService() {
         return paymentService;
+    }
+
+    public DownstreamService getNotificationService() {
+        return notificationService;
     }
 
     public Internal getInternal() {

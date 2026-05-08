@@ -10,7 +10,7 @@ spring:
     password: ${MYSQL_PASSWORD:Abhi@8279}
     driver-class-name: com.mysql.cj.jdbc.Driver
   cache:
-    type: redis
+    type: ${CACHE_TYPE:simple}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -43,6 +43,9 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    redis:
+      enabled: ${REDIS_HEALTH_ENABLED:false}
   endpoint:
     health:
       show-details: when_authorized

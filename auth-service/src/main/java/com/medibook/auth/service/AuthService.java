@@ -2,9 +2,11 @@ package com.medibook.auth.service;
 
 import com.medibook.auth.dto.request.ChangePasswordRequest;
 import com.medibook.auth.dto.request.DeactivateAccountRequest;
+import com.medibook.auth.dto.request.ForgotPasswordRequest;
 import com.medibook.auth.dto.request.LoginRequest;
 import com.medibook.auth.dto.request.RefreshTokenRequest;
 import com.medibook.auth.dto.request.RegisterRequest;
+import com.medibook.auth.dto.request.ResetPasswordRequest;
 import com.medibook.auth.dto.request.UpdateProfileRequest;
 import com.medibook.auth.dto.request.UserStatusUpdateRequest;
 import com.medibook.auth.dto.response.AuthResponse;
@@ -22,6 +24,10 @@ public interface AuthService {
     AuthResponse register(RegisterRequest request);
 
     AuthResponse login(LoginRequest request);
+
+    MessageResponse requestPasswordReset(ForgotPasswordRequest request);
+
+    MessageResponse resetPassword(ResetPasswordRequest request);
 
     MessageResponse logout(String email);
 
@@ -47,5 +53,5 @@ public interface AuthService {
 
     UserResponse updateUserStatus(String userId, UserStatusUpdateRequest request);
 
-    AuthResponse handleOAuthLogin(AuthProvider provider, Map<String, Object> attributes);
+    AuthResponse handleOAuthLogin(AuthProvider provider, Role requestedRole, Map<String, Object> attributes);
 }

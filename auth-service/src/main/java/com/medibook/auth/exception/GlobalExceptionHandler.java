@@ -37,6 +37,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), List.of());
     }
 
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<ApiErrorResponse> handleExternalService(ExternalServiceException exception) {
+        return build(HttpStatus.BAD_GATEWAY, exception.getMessage(), List.of());
+    }
+
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<ApiErrorResponse> handleConflict(DuplicateResourceException exception) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), List.of());
@@ -78,4 +83,3 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(body);
     }
 }
-

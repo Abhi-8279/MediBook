@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.medibook.notification.config.AppProperties;
 import com.medibook.notification.dto.request.FollowUpReminderRequest;
 import com.medibook.notification.dto.request.ScheduleAppointmentRemindersRequest;
 import com.medibook.notification.dto.request.SendBulkNotificationRequest;
@@ -57,14 +58,18 @@ class NotificationServiceImplTest {
     @Mock
     private SmsSender smsSender;
 
+    private AppProperties appProperties;
+
     private NotificationServiceImpl notificationService;
 
     @BeforeEach
     void setUp() {
+        appProperties = new AppProperties();
         notificationService = new NotificationServiceImpl(
                 notificationRepository,
                 notificationScheduleRepository,
                 authServiceGateway,
+                appProperties,
                 emailSender,
                 smsSender,
                 FIXED_CLOCK);

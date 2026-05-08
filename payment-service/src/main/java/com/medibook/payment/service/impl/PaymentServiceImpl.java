@@ -1,9 +1,13 @@
 package com.medibook.payment.service.impl;
 
 import com.medibook.payment.config.AppProperties;
+import com.medibook.payment.dto.request.CreateCheckoutOrderRequest;
+import com.medibook.payment.dto.request.MarkCheckoutPaymentFailedRequest;
 import com.medibook.payment.dto.request.ProcessPaymentRequest;
 import com.medibook.payment.dto.request.RefundPaymentRequest;
 import com.medibook.payment.dto.request.UpdatePaymentStatusRequest;
+import com.medibook.payment.dto.request.VerifyCheckoutPaymentRequest;
+import com.medibook.payment.dto.response.CheckoutOrderResponse;
 import com.medibook.payment.dto.response.InvoiceResponse;
 import com.medibook.payment.dto.response.MessageResponse;
 import com.medibook.payment.dto.response.MonthlyRevenueItemResponse;
@@ -16,10 +20,9 @@ import com.medibook.payment.enums.AppointmentStatus;
 import com.medibook.payment.enums.PaymentMode;
 import com.medibook.payment.enums.PaymentStatus;
 import com.medibook.payment.enums.Role;
-import com.medibook.payment.messaging.NotificationEventPublisher;
 import com.medibook.payment.exception.PaymentConflictException;
 import com.medibook.payment.exception.ResourceNotFoundException;
-import com.medibook.payment.repository.MonthlyRevenueView;
+import com.medibook.payment.messaging.NotificationEventPublisher;
 import com.medibook.payment.repository.PaymentRepository;
 import com.medibook.payment.security.AuthenticatedUser;
 import com.medibook.payment.service.AppointmentServiceGateway;
@@ -27,8 +30,12 @@ import com.medibook.payment.service.AppointmentSummary;
 import com.medibook.payment.service.PaymentService;
 import com.medibook.payment.service.ProviderServiceGateway;
 import com.medibook.payment.service.ProviderSummary;
+import com.medibook.payment.service.RazorpayGateway;
+import com.medibook.payment.service.RazorpayOrder;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -37,10 +44,14 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +64,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final AppointmentServiceGateway appointmentServiceGateway;
     private final ProviderServiceGateway providerServiceGateway;
+    private final RazorpayGateway razorpayGateway;
     private final NotificationEventPublisher notificationEventPublisher;
     private final AppProperties appProperties;
     private final Clock clock;
@@ -61,12 +73,14 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentRepository paymentRepository,
             AppointmentServiceGateway appointmentServiceGateway,
             ProviderServiceGateway providerServiceGateway,
+            RazorpayGateway razorpayGateway,
             NotificationEventPublisher notificationEventPublisher,
             AppProperties appProperties,
             Clock clock) {
         this.paymentRepository = paymentRepository;
         this.appointmentServiceGateway = appointmentServiceGateway;
         this.providerServiceGateway = providerServiceGateway;
+        this.razorpayGateway = razorpayGateway;
         this.notificationEventPublisher = notificationEventPublisher;
         this.appProperties = appProperties;
         this.clock = clock;
@@ -77,42 +91,156 @@ public class PaymentServiceImpl implements PaymentService {
         if (!isAdmin(authenticatedUser) && !isPatient(authenticatedUser)) {
             throw new AccessDeniedException("Only patients or admins can process payments");
         }
-
-        AppointmentSummary appointment = appointmentServiceGateway.getAppointmentById(request.appointmentId().trim());
-        assertPaymentAllowedForAppointment(appointment);
-        if (isPatient(authenticatedUser) && !appointment.patientId().equals(authenticatedUser.userId())) {
-            throw new AccessDeniedException("You can only pay for your own appointments");
+        if (request.mode() != PaymentMode.CASH) {
+            throw new IllegalStateException("Online payments must be completed through Razorpay checkout");
         }
 
+        AppointmentSummary appointment = loadPayableAppointment(request.appointmentId(), authenticatedUser);
         Payment payment = paymentRepository.findByAppointmentId(appointment.appointmentId()).orElseGet(Payment::new);
-        if (payment.getPaymentId() != null && payment.getStatus() == PaymentStatus.PAID) {
-            throw new PaymentConflictException("Payment is already completed for this appointment");
-        }
-        if (payment.getPaymentId() != null && payment.getStatus() == PaymentStatus.REFUNDED) {
-            throw new PaymentConflictException("Refunded appointments cannot be paid again");
-        }
-
-        Instant now = Instant.now(clock);
-        PaymentStatus processedStatus = request.mode() == PaymentMode.CASH ? PaymentStatus.PENDING : PaymentStatus.PAID;
+        assertPaymentCanBeUpdated(payment);
 
         if (payment.getPaymentId() == null) {
             payment.setPaymentId(UUID.randomUUID().toString());
         }
+
         payment.setAppointmentId(appointment.appointmentId());
         payment.setPatientId(appointment.patientId());
         payment.setProviderId(appointment.providerId());
         payment.setAmount(normalizeAmount(request.amount()));
-        payment.setMode(request.mode());
+        payment.setMode(PaymentMode.CASH);
         payment.setCurrency(resolveCurrency(request.currency()));
-        payment.setStatus(processedStatus);
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setTransactionId(generateTransactionId(PaymentMode.CASH));
+        payment.setGatewayOrderId(null);
+        payment.setGatewayPaymentId(null);
+        payment.setPaidAt(null);
+        payment.setRefundedAt(null);
+        payment.setNotes(blankToNull(request.notes()));
+
+        return toResponse(paymentRepository.saveAndFlush(payment));
+    }
+
+    @Override
+    public CheckoutOrderResponse createCheckoutOrder(
+            AuthenticatedUser authenticatedUser,
+            CreateCheckoutOrderRequest request) {
+        if (!isAdmin(authenticatedUser) && !isPatient(authenticatedUser)) {
+            throw new AccessDeniedException("Only patients or admins can create checkout orders");
+        }
+        assertOnlineMode(request.mode());
+
+        AppointmentSummary appointment = loadPayableAppointment(request.appointmentId(), authenticatedUser);
+        Payment payment = paymentRepository.findByAppointmentId(appointment.appointmentId()).orElseGet(Payment::new);
+        assertPaymentCanBeUpdated(payment);
+
+        if (payment.getPaymentId() == null) {
+            payment.setPaymentId(UUID.randomUUID().toString());
+        }
+
+        BigDecimal normalizedAmount = normalizeAmount(request.amount());
+        String currency = resolveCurrency(request.currency());
+        RazorpayOrder razorpayOrder = razorpayGateway.createOrder(
+                buildReceipt(payment.getPaymentId(), appointment.appointmentId()),
+                normalizedAmount,
+                currency,
+                buildRazorpayNotes(appointment, request.mode()));
+
+        payment.setAppointmentId(appointment.appointmentId());
+        payment.setPatientId(appointment.patientId());
+        payment.setProviderId(appointment.providerId());
+        payment.setAmount(normalizedAmount);
+        payment.setMode(request.mode());
+        payment.setCurrency(currency);
+        payment.setStatus(PaymentStatus.PENDING);
         payment.setTransactionId(generateTransactionId(request.mode()));
-        payment.setPaidAt(processedStatus == PaymentStatus.PAID ? now : null);
+        payment.setGatewayOrderId(razorpayOrder.id());
+        payment.setGatewayPaymentId(null);
+        payment.setPaidAt(null);
         payment.setRefundedAt(null);
         payment.setNotes(blankToNull(request.notes()));
 
         Payment saved = paymentRepository.saveAndFlush(payment);
+        AppProperties.Razorpay razorpay = appProperties.getPayment().getRazorpay();
+        return new CheckoutOrderResponse(
+                saved.getPaymentId(),
+                saved.getAppointmentId(),
+                razorpayOrder.id(),
+                razorpayGateway.getKeyId(),
+                normalizedAmount,
+                razorpayOrder.amount(),
+                currency,
+                razorpay.getCheckoutName(),
+                razorpay.getCheckoutDescription(),
+                blankToNull(razorpay.getCheckoutImageUrl()));
+    }
+
+    @Override
+    public PaymentResponse verifyCheckoutPayment(
+            AuthenticatedUser authenticatedUser,
+            VerifyCheckoutPaymentRequest request) {
+        if (!isAdmin(authenticatedUser) && !isPatient(authenticatedUser)) {
+            throw new AccessDeniedException("Only patients or admins can verify checkout payments");
+        }
+
+        Payment payment = findPaymentOrThrow(request.paymentId().trim());
+        assertCanView(payment, authenticatedUser);
+        if (payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new PaymentConflictException("Refunded appointments cannot be paid again");
+        }
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            if (Objects.equals(payment.getGatewayPaymentId(), request.razorpayPaymentId().trim())) {
+                return toResponse(payment);
+            }
+            throw new PaymentConflictException("Payment is already completed for this appointment");
+        }
+        if (!StringUtils.hasText(payment.getGatewayOrderId())) {
+            throw new IllegalStateException("No Razorpay checkout order exists for this payment");
+        }
+        if (!payment.getGatewayOrderId().equals(request.razorpayOrderId().trim())) {
+            throw new IllegalStateException("Razorpay order does not match the initialized checkout order");
+        }
+        if (!verifyRazorpaySignature(payment.getGatewayOrderId(), request.razorpayPaymentId().trim(), request.razorpaySignature().trim())) {
+            markPaymentFailed(payment, request.razorpayPaymentId().trim(), "Razorpay signature verification failed");
+            paymentRepository.saveAndFlush(payment);
+            throw new IllegalStateException("Payment verification failed");
+        }
+
+        payment.setStatus(PaymentStatus.PAID);
+        payment.setTransactionId(request.razorpayPaymentId().trim());
+        payment.setGatewayPaymentId(request.razorpayPaymentId().trim());
+        payment.setPaidAt(Instant.now(clock));
+        payment.setRefundedAt(null);
+
+        Payment saved = paymentRepository.saveAndFlush(payment);
         publishProcessedEventQuietly(saved);
         return toResponse(saved);
+    }
+
+    @Override
+    public PaymentResponse markCheckoutPaymentFailed(
+            AuthenticatedUser authenticatedUser,
+            MarkCheckoutPaymentFailedRequest request) {
+        if (!isAdmin(authenticatedUser) && !isPatient(authenticatedUser)) {
+            throw new AccessDeniedException("Only patients or admins can update checkout failures");
+        }
+
+        Payment payment = findPaymentOrThrow(request.paymentId().trim());
+        assertCanView(payment, authenticatedUser);
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            throw new PaymentConflictException("Completed payments cannot be marked as failed");
+        }
+        if (payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new PaymentConflictException("Refunded payments cannot be marked as failed");
+        }
+        String gatewayOrderId = blankToNull(request.razorpayOrderId());
+        if (gatewayOrderId != null
+                && StringUtils.hasText(payment.getGatewayOrderId())
+                && !payment.getGatewayOrderId().equals(gatewayOrderId)) {
+            throw new IllegalStateException("Razorpay order does not match the initialized checkout order");
+        }
+
+        markPaymentFailed(payment, blankToNull(request.razorpayPaymentId()), request.reason());
+        return toResponse(paymentRepository.saveAndFlush(payment));
     }
 
     @Override
@@ -240,9 +368,7 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setRefundedAt(payment.getRefundedAt() == null ? Instant.now(clock) : payment.getRefundedAt());
         } else {
             payment.setRefundedAt(null);
-            if (request.status() == PaymentStatus.FAILED) {
-                payment.setPaidAt(null);
-            } else if (request.status() == PaymentStatus.PENDING) {
+            if (request.status() == PaymentStatus.FAILED || request.status() == PaymentStatus.PENDING) {
                 payment.setPaidAt(null);
             }
         }
@@ -345,6 +471,15 @@ public class PaymentServiceImpl implements PaymentService {
         return buildRevenueSummary(providerId, paidFrom, paidTo);
     }
 
+    private AppointmentSummary loadPayableAppointment(String appointmentId, AuthenticatedUser authenticatedUser) {
+        AppointmentSummary appointment = appointmentServiceGateway.getAppointmentById(appointmentId.trim());
+        assertPaymentAllowedForAppointment(appointment);
+        if (isPatient(authenticatedUser) && !appointment.patientId().equals(authenticatedUser.userId())) {
+            throw new AccessDeniedException("You can only pay for your own appointments");
+        }
+        return appointment;
+    }
+
     private Payment findPaymentOrThrow(String paymentId) {
         return paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
@@ -353,6 +488,15 @@ public class PaymentServiceImpl implements PaymentService {
     private Payment findPaymentByAppointmentOrThrow(String appointmentId) {
         return paymentRepository.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+    }
+
+    private void assertPaymentCanBeUpdated(Payment payment) {
+        if (payment.getPaymentId() != null && payment.getStatus() == PaymentStatus.PAID) {
+            throw new PaymentConflictException("Payment is already completed for this appointment");
+        }
+        if (payment.getPaymentId() != null && payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new PaymentConflictException("Refunded appointments cannot be paid again");
+        }
     }
 
     private void applyRefund(Payment payment, String reason) {
@@ -370,6 +514,12 @@ public class PaymentServiceImpl implements PaymentService {
     private void assertPaymentAllowedForAppointment(AppointmentSummary appointment) {
         if (appointment.status() == AppointmentStatus.CANCELLED || appointment.status() == AppointmentStatus.NO_SHOW) {
             throw new IllegalStateException("Payments are not allowed for cancelled or no-show appointments");
+        }
+    }
+
+    private void assertOnlineMode(PaymentMode mode) {
+        if (mode == null || mode == PaymentMode.CASH) {
+            throw new IllegalArgumentException("Razorpay checkout supports CARD, UPI, or WALLET payments only");
         }
     }
 
@@ -497,13 +647,6 @@ public class PaymentServiceImpl implements PaymentService {
         };
     }
 
-    private MonthlyRevenueItemResponse toMonthlyRevenue(MonthlyRevenueView monthlyRevenueView) {
-        return new MonthlyRevenueItemResponse(
-                monthlyRevenueView.getRevenueMonth(),
-                normalizeAmount(monthlyRevenueView.getTotalRevenue()),
-                monthlyRevenueView.getPaidTransactionCount());
-    }
-
     private PaymentResponse toResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getPaymentId(),
@@ -524,6 +667,24 @@ public class PaymentServiceImpl implements PaymentService {
 
     private String buildInvoiceNumber(Payment payment) {
         return "INV-" + payment.getPaymentId().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+    }
+
+    private String buildReceipt(String paymentId, String appointmentId) {
+        String compactPaymentId = paymentId.replace("-", "");
+        String compactAppointmentId = appointmentId.replace("-", "");
+        return "MB-"
+                + compactPaymentId.substring(0, Math.min(compactPaymentId.length(), 20))
+                + "-"
+                + compactAppointmentId.substring(0, Math.min(compactAppointmentId.length(), 12));
+    }
+
+    private Map<String, String> buildRazorpayNotes(AppointmentSummary appointment, PaymentMode mode) {
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("appointmentId", appointment.appointmentId());
+        notes.put("patientId", appointment.patientId());
+        notes.put("providerId", appointment.providerId());
+        notes.put("mode", mode.name());
+        return notes;
     }
 
     private String generateTransactionId(PaymentMode mode) {
@@ -596,6 +757,45 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (RuntimeException ignored) {
             // Refund processing should remain available even if event publishing is unavailable.
         }
+    }
+
+    private void markPaymentFailed(Payment payment, String gatewayPaymentId, String reason) {
+        payment.setStatus(PaymentStatus.FAILED);
+        payment.setGatewayPaymentId(blankToNull(gatewayPaymentId));
+        payment.setPaidAt(null);
+        payment.setRefundedAt(null);
+        payment.setNotes(mergeNotes(payment.getNotes(), StringUtils.hasText(reason) ? reason : "Razorpay checkout failed"));
+    }
+
+    private boolean verifyRazorpaySignature(String orderId, String razorpayPaymentId, String signature) {
+        String secret = appProperties.getPayment().getRazorpay().getKeySecret();
+        if (!StringUtils.hasText(secret)) {
+            throw new IllegalStateException("Razorpay credentials are missing from the payment service configuration");
+        }
+
+        String payload = orderId + "|" + razorpayPaymentId;
+        byte[] expected = hmacSha256(payload, secret.trim());
+        byte[] actual = signature.trim().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expected, actual);
+    }
+
+    private byte[] hmacSha256(String payload, String secret) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            return toHex(digest).getBytes(StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to verify Razorpay payment signature", exception);
+        }
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            builder.append(String.format(Locale.ROOT, "%02x", value));
+        }
+        return builder.toString();
     }
 
     private Instant toStartInstant(LocalDate date) {

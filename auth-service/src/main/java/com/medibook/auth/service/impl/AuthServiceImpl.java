@@ -3,9 +3,11 @@ package com.medibook.auth.service.impl;
 import com.medibook.auth.config.AppProperties;
 import com.medibook.auth.dto.request.ChangePasswordRequest;
 import com.medibook.auth.dto.request.DeactivateAccountRequest;
+import com.medibook.auth.dto.request.ForgotPasswordRequest;
 import com.medibook.auth.dto.request.LoginRequest;
 import com.medibook.auth.dto.request.RefreshTokenRequest;
 import com.medibook.auth.dto.request.RegisterRequest;
+import com.medibook.auth.dto.request.ResetPasswordRequest;
 import com.medibook.auth.dto.request.UpdateProfileRequest;
 import com.medibook.auth.dto.request.UserStatusUpdateRequest;
 import com.medibook.auth.dto.response.AuthResponse;
@@ -13,6 +15,7 @@ import com.medibook.auth.dto.response.MessageResponse;
 import com.medibook.auth.dto.response.TokenValidationResponse;
 import com.medibook.auth.dto.response.UserResponse;
 import com.medibook.auth.dto.response.UserSummaryResponse;
+import com.medibook.auth.entity.PasswordResetToken;
 import com.medibook.auth.entity.RefreshToken;
 import com.medibook.auth.entity.User;
 import com.medibook.auth.enums.AuthProvider;
@@ -22,11 +25,20 @@ import com.medibook.auth.exception.DuplicateResourceException;
 import com.medibook.auth.exception.InvalidCredentialsException;
 import com.medibook.auth.exception.ResourceNotFoundException;
 import com.medibook.auth.exception.TokenValidationException;
+import com.medibook.auth.repository.PasswordResetTokenRepository;
 import com.medibook.auth.repository.RefreshTokenRepository;
 import com.medibook.auth.repository.UserRepository;
 import com.medibook.auth.security.JwtService;
 import com.medibook.auth.service.AuthService;
+import com.medibook.auth.service.NotificationServiceGateway;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,23 +52,34 @@ import org.springframework.util.StringUtils;
 @Transactional
 public class AuthServiceImpl implements AuthService {
 
+    private static final String PASSWORD_RESET_MESSAGE =
+            "If an active local account exists for that email, a password reset link has been sent.";
+    private static final String PASSWORD_RESET_SUBJECT = "Reset your MediBook password";
+
     private final UserRepository userRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AppProperties appProperties;
+    private final NotificationServiceGateway notificationServiceGateway;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthServiceImpl(
             UserRepository userRepository,
+            PasswordResetTokenRepository passwordResetTokenRepository,
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            AppProperties appProperties) {
+            AppProperties appProperties,
+            NotificationServiceGateway notificationServiceGateway) {
         this.userRepository = userRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.appProperties = appProperties;
+        this.notificationServiceGateway = notificationServiceGateway;
     }
 
     @Override
@@ -101,6 +124,67 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return buildAuthResponse(user, issueRefreshToken(user));
+    }
+
+    @Override
+    public MessageResponse requestPasswordReset(ForgotPasswordRequest request) {
+        Optional<User> optionalUser = userRepository.findByEmail(normalizeEmail(request.email()));
+        if (optionalUser.isEmpty()) {
+            return new MessageResponse(PASSWORD_RESET_MESSAGE);
+        }
+
+        User user = optionalUser.get();
+        if (!user.isActive() || !isLocalUser(user) || !StringUtils.hasText(user.getPasswordHash())) {
+            return new MessageResponse(PASSWORD_RESET_MESSAGE);
+        }
+
+        invalidateUnusedPasswordResetTokens(user, Instant.now());
+
+        String rawToken = generateSecureToken();
+        Instant expiresAt = Instant.now().plusMillis(appProperties.getPasswordReset().getExpirationMs());
+
+        PasswordResetToken passwordResetToken = new PasswordResetToken();
+        passwordResetToken.setTokenHash(hashToken(rawToken));
+        passwordResetToken.setUser(user);
+        passwordResetToken.setExpiresAt(expiresAt);
+        passwordResetToken.setUsed(false);
+        passwordResetTokenRepository.save(passwordResetToken);
+
+        notificationServiceGateway.sendPasswordResetNotification(
+                user.getEmail(),
+                PASSWORD_RESET_SUBJECT,
+                buildPasswordResetEmailBody(user, buildPasswordResetUrl(rawToken), expiresAt));
+
+        return new MessageResponse(PASSWORD_RESET_MESSAGE);
+    }
+
+    @Override
+    public MessageResponse resetPassword(ResetPasswordRequest request) {
+        String tokenHash = hashToken(normalizeRequired(request.token(), "Reset token is required"));
+        PasswordResetToken passwordResetToken = passwordResetTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> new TokenValidationException("Password reset link is invalid or expired"));
+
+        Instant now = Instant.now();
+        if (passwordResetToken.isUsed() || passwordResetToken.getExpiresAt().isBefore(now)) {
+            throw new TokenValidationException("Password reset link is invalid or expired");
+        }
+
+        User user = passwordResetToken.getUser();
+        assertActive(user);
+
+        if (!isLocalUser(user) || !StringUtils.hasText(user.getPasswordHash())) {
+            throw new IllegalStateException("Password reset is only available for local accounts");
+        }
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("New password must be different from the current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+        revokeAllTokens(user);
+        invalidateUnusedPasswordResetTokens(user, now);
+        return new MessageResponse("Password reset successfully. Please log in again.");
     }
 
     @Override
@@ -255,29 +339,32 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public AuthResponse handleOAuthLogin(AuthProvider provider, Map<String, Object> attributes) {
+    public AuthResponse handleOAuthLogin(AuthProvider provider, Role requestedRole, Map<String, Object> attributes) {
         OAuthUserInfo userInfo = extractOAuthUserInfo(provider, attributes);
         User user = userRepository.findByEmail(userInfo.email())
-                .map(existingUser -> updateOauthUser(existingUser, provider, userInfo))
-                .orElseGet(() -> createOauthUser(provider, userInfo));
+                .map(existingUser -> updateOauthUser(existingUser, provider, userInfo, requestedRole))
+                .orElseGet(() -> createOauthUser(provider, userInfo, requestedRole));
         assertActive(user);
         return buildAuthResponse(user, issueRefreshToken(user));
     }
 
-    private User createOauthUser(AuthProvider provider, OAuthUserInfo userInfo) {
+    private User createOauthUser(AuthProvider provider, OAuthUserInfo userInfo, Role requestedRole) {
         User user = new User();
         user.setUserId(UUID.randomUUID().toString());
         user.setFullName(userInfo.fullName());
         user.setEmail(userInfo.email());
-        user.setRole(Role.PATIENT);
+        user.setRole(resolveOauthRole(requestedRole));
         user.setAuthProvider(provider);
         user.setProfilePicUrl(userInfo.profilePicUrl());
         user.setActive(true);
         return userRepository.save(user);
     }
 
-    private User updateOauthUser(User user, AuthProvider provider, OAuthUserInfo userInfo) {
+    private User updateOauthUser(User user, AuthProvider provider, OAuthUserInfo userInfo, Role requestedRole) {
         user.setAuthProvider(provider);
+        if (user.getRole() != Role.ADMIN) {
+            user.setRole(resolveOauthRole(requestedRole));
+        }
         if (StringUtils.hasText(userInfo.fullName())) {
             user.setFullName(userInfo.fullName());
         }
@@ -327,6 +414,18 @@ public class AuthServiceImpl implements AuthService {
         var activeTokens = refreshTokenRepository.findAllByUserAndRevokedFalse(user);
         activeTokens.forEach(token -> token.setRevoked(true));
         refreshTokenRepository.saveAll(activeTokens);
+    }
+
+    private void invalidateUnusedPasswordResetTokens(User user, Instant usedAt) {
+        List<PasswordResetToken> activeTokens = passwordResetTokenRepository.findAllByUserAndUsedFalse(user);
+        if (activeTokens.isEmpty()) {
+            return;
+        }
+        activeTokens.forEach(token -> {
+            token.setUsed(true);
+            token.setUsedAt(usedAt);
+        });
+        passwordResetTokenRepository.saveAll(activeTokens);
     }
 
     private void validatePhoneUniqueness(String phone, String currentUserId) {
@@ -382,11 +481,57 @@ public class AuthServiceImpl implements AuthService {
         return user.getAuthProvider() == AuthProvider.LOCAL;
     }
 
+    private String buildPasswordResetEmailBody(User user, String resetUrl, Instant expiresAt) {
+        long expiresInMinutes = Math.max(1, appProperties.getPasswordReset().getExpirationMs() / 60_000);
+        return "Hello "
+                + user.getFullName()
+                + ",\n\n"
+                + "We received a request to reset your MediBook password.\n\n"
+                + "Reset your password using this link:\n"
+                + resetUrl
+                + "\n\n"
+                + "This link expires in "
+                + expiresInMinutes
+                + " minute(s) at "
+                + expiresAt
+                + ".\n\n"
+                + "If you did not request this change, you can ignore this email.\n\n"
+                + "MediBook Team";
+    }
+
+    private String buildPasswordResetUrl(String token) {
+        String baseUrl = appProperties.getPasswordReset().getFrontendBaseUrl().replaceAll("/+$", "");
+        String separator = baseUrl.contains("?") ? "&" : "?";
+        return baseUrl + separator + "token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+    }
+
+    private String generateSecureToken() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available on this runtime", exception);
+        }
+    }
+
     private String normalizeEmail(String email) {
         if (!StringUtils.hasText(email)) {
             throw new IllegalArgumentException("Email is required");
         }
         return email.trim().toLowerCase();
+    }
+
+    private String normalizeRequired(String value, String message) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
     }
 
     private String normalizePhone(String phone) {
@@ -403,6 +548,13 @@ public class AuthServiceImpl implements AuthService {
 
     private String stringValue(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private Role resolveOauthRole(Role requestedRole) {
+        if (requestedRole == Role.PROVIDER) {
+            return Role.PROVIDER;
+        }
+        return Role.PATIENT;
     }
 
     private record OAuthUserInfo(String email, String fullName, String profilePicUrl) {
