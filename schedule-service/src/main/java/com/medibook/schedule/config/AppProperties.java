@@ -36,11 +36,11 @@ public class AppProperties {
         private int readTimeoutMs = 5000;
 
         public String getBaseUrl() {
-            return baseUrl;
+            return normalizeBaseUrl(baseUrl);
         }
 
         public void setBaseUrl(String baseUrl) {
-            this.baseUrl = baseUrl;
+            this.baseUrl = normalizeBaseUrl(baseUrl);
         }
 
         public int getConnectTimeoutMs() {
@@ -57,6 +57,13 @@ public class AppProperties {
 
         public void setReadTimeoutMs(int readTimeoutMs) {
             this.readTimeoutMs = readTimeoutMs;
+        }
+
+        private String normalizeBaseUrl(String value) {
+            if (value == null || value.isBlank() || value.contains("://")) {
+                return value;
+            }
+            return "http://" + value;
         }
     }
 

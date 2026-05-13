@@ -1,8 +1,8 @@
 # MediBook API Gateway
 
-This service is the single entry point for the MediBook microservices system. It now registers with Eureka and routes
-to downstream services through service discovery by default, while still allowing explicit URL overrides through
-environment variables.
+This service is the single entry point for the MediBook microservices system. It registers with Eureka, but for local
+development it routes to downstream services through direct URLs by default while still allowing explicit environment
+variable overrides for Docker and hosted deployments.
 
 ## What it does
 
@@ -10,7 +10,7 @@ environment variables.
 - Centralizes CORS handling for your frontend or MVC layer
 - Exposes health and gateway actuator endpoints
 - Adds a request ID header when a client does not send one
-- Uses Eureka service discovery by default and environment-variable overrides when you need fixed URLs
+- Uses direct local service URLs by default and environment-variable overrides when you need container or hosted URLs
 
 ## Current service map
 
@@ -58,7 +58,7 @@ Run `eureka-server` first, then start the gateway and whichever backend services
 ..\.tools\apache-maven-3.9.9\bin\mvn.cmd spring-boot:run
 ```
 
-If you want to override the auth route locally instead of using Eureka:
+If you want to override the auth route locally:
 
 ```powershell
 $env:AUTH_SERVICE_URL="http://localhost:8081"
