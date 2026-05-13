@@ -1,0 +1,49 @@
+server:
+  port: ${PORT:${SERVER_PORT:8080}}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin RETAIN_UNIQUE
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://${EUREKA_SERVER_HOST:localhost}:${EUREKA_SERVER_PORT:8761}/eureka}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+
+medibook:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:*}
+  services:
+    auth: ${AUTH_SERVICE_URL:http://localhost:8081}
+    provider: ${PROVIDER_SERVICE_URL:http://localhost:8082}
+    schedule: ${SCHEDULE_SERVICE_URL:http://localhost:8083}
+    appointment: ${APPOINTMENT_SERVICE_URL:http://localhost:8084}
+    payment: ${PAYMENT_SERVICE_URL:http://localhost:8085}
+    review: ${REVIEW_SERVICE_URL:http://localhost:8086}
+    notification: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
+    record: ${RECORD_SERVICE_URL:http://localhost:8088}
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+    com.medibook.gateway: INFO
