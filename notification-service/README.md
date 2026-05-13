@@ -67,6 +67,11 @@ Set these environment variables if you do not want the defaults from `applicatio
 - `NOTIFICATION_SMS_SENDER_ID`
 - `NOTIFICATION_REMINDER_DISPATCH_INTERVAL_MS`
 - `SERVER_PORT`
+- `RABBITMQ_HOST`
+- `RABBITMQ_PORT`
+- `RABBITMQ_USERNAME`
+- `RABBITMQ_PASSWORD`
+- `RABBIT_LISTENERS_AUTO_STARTUP`
 
 Build and run with:
 
@@ -76,6 +81,10 @@ Build and run with:
 ```
 
 OpenAPI is available at `/swagger-ui.html`.
+
+RabbitMQ event listeners are disabled by default for local startup. This lets the service run without a
+local broker on `localhost:5672`. When you want appointment/payment/record events to flow through RabbitMQ,
+start RabbitMQ first and set `RABBIT_LISTENERS_AUTO_STARTUP=true`.
 
 Docker or direct jar output:
 

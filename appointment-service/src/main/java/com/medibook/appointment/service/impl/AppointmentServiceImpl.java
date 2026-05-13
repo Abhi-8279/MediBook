@@ -12,13 +12,13 @@ import com.medibook.appointment.entity.Appointment;
 import com.medibook.appointment.enums.AppointmentStatus;
 import com.medibook.appointment.enums.Role;
 import com.medibook.appointment.exception.AppointmentConflictException;
-import com.medibook.appointment.exception.ExternalServiceException;
-import com.medibook.appointment.messaging.NotificationEventPublisher;
-import com.medibook.appointment.exception.ResourceNotFoundException;
 import com.medibook.appointment.config.AppProperties;
+import com.medibook.appointment.exception.ExternalServiceException;
+import com.medibook.appointment.exception.ResourceNotFoundException;
 import com.medibook.appointment.repository.AppointmentRepository;
 import com.medibook.appointment.security.AuthenticatedUser;
 import com.medibook.appointment.service.AppointmentService;
+import com.medibook.appointment.service.NotificationServiceGateway;
 import com.medibook.appointment.service.PaymentServiceGateway;
 import com.medibook.appointment.service.ProviderServiceGateway;
 import com.medibook.appointment.service.ProviderSummary;
@@ -44,7 +44,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final ProviderServiceGateway providerServiceGateway;
     private final ScheduleServiceGateway scheduleServiceGateway;
     private final PaymentServiceGateway paymentServiceGateway;
-    private final NotificationEventPublisher notificationEventPublisher;
+    private final NotificationServiceGateway notificationServiceGateway;
     private final AppProperties appProperties;
     private final Clock clock;
 
@@ -53,14 +53,14 @@ public class AppointmentServiceImpl implements AppointmentService {
             ProviderServiceGateway providerServiceGateway,
             ScheduleServiceGateway scheduleServiceGateway,
             PaymentServiceGateway paymentServiceGateway,
-            NotificationEventPublisher notificationEventPublisher,
+            NotificationServiceGateway notificationServiceGateway,
             AppProperties appProperties,
             Clock clock) {
         this.appointmentRepository = appointmentRepository;
         this.providerServiceGateway = providerServiceGateway;
         this.scheduleServiceGateway = scheduleServiceGateway;
         this.paymentServiceGateway = paymentServiceGateway;
-        this.notificationEventPublisher = notificationEventPublisher;
+        this.notificationServiceGateway = notificationServiceGateway;
         this.appProperties = appProperties;
         this.clock = clock;
     }
@@ -89,7 +89,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         scheduleServiceGateway.bookSlot(slot.slotId(), appointment.getAppointmentId());
         try {
             Appointment saved = appointmentRepository.saveAndFlush(appointment);
-            publishBookedEventQuietly(saved);
+            sendBookedNotificationsQuietly(saved);
             return toResponse(saved);
         } catch (RuntimeException exception) {
             safeReleaseSlot(slot.slotId());
@@ -233,7 +233,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         requestRefundQuietly(saved);
-        publishCancelledEventQuietly(saved);
+        sendCancelledNotificationsQuietly(saved);
         return toResponse(saved);
     }
 
@@ -270,7 +270,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         try {
             scheduleServiceGateway.releaseSlot(snapshot.slotId());
-            publishRescheduledEventQuietly(appointment, snapshot);
+            sendRescheduledNotificationsQuietly(appointment, snapshot);
             return toResponse(appointment);
         } catch (RuntimeException exception) {
             snapshot.restore(appointment);
@@ -483,31 +483,31 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
-    private void publishBookedEventQuietly(Appointment appointment) {
+    private void sendBookedNotificationsQuietly(Appointment appointment) {
         try {
-            notificationEventPublisher.publishBooked(appointment);
+            notificationServiceGateway.sendAppointmentBookedNotifications(appointment);
         } catch (RuntimeException ignored) {
-            // Booking must remain available even if notification publishing is temporarily unavailable.
+            // Booking must remain available even if notification delivery is temporarily unavailable.
         }
     }
 
-    private void publishCancelledEventQuietly(Appointment appointment) {
+    private void sendCancelledNotificationsQuietly(Appointment appointment) {
         try {
-            notificationEventPublisher.publishCancelled(appointment);
+            notificationServiceGateway.sendAppointmentCancelledNotifications(appointment);
         } catch (RuntimeException ignored) {
-            // Cancellation must remain available even if notification publishing is temporarily unavailable.
+            // Cancellation must remain available even if notification delivery is temporarily unavailable.
         }
     }
 
-    private void publishRescheduledEventQuietly(Appointment appointment, AppointmentSnapshot snapshot) {
+    private void sendRescheduledNotificationsQuietly(Appointment appointment, AppointmentSnapshot snapshot) {
         try {
-            notificationEventPublisher.publishRescheduled(
+            notificationServiceGateway.sendAppointmentRescheduledNotifications(
                     appointment,
                     snapshot.appointmentDate(),
                     snapshot.startTime(),
                     snapshot.endTime());
         } catch (RuntimeException ignored) {
-            // Rescheduling must remain available even if notification publishing is temporarily unavailable.
+            // Rescheduling must remain available even if notification delivery is temporarily unavailable.
         }
     }
 

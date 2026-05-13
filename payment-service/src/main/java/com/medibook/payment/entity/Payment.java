@@ -44,6 +44,12 @@ public class Payment {
     @Column(name = "transaction_id", nullable = false, unique = true, length = 80)
     private String transactionId;
 
+    @Column(name = "gateway_order_id", length = 80)
+    private String gatewayOrderId;
+
+    @Column(name = "gateway_payment_id", length = 80)
+    private String gatewayPaymentId;
+
     @Column(nullable = false, length = 10)
     private String currency = "INR";
 
@@ -149,6 +155,22 @@ public class Payment {
 
     public void setCurrency(String currency) {
         this.currency = currency;
+    }
+
+    public String getGatewayOrderId() {
+        return gatewayOrderId;
+    }
+
+    public void setGatewayOrderId(String gatewayOrderId) {
+        this.gatewayOrderId = gatewayOrderId;
+    }
+
+    public String getGatewayPaymentId() {
+        return gatewayPaymentId;
+    }
+
+    public void setGatewayPaymentId(String gatewayPaymentId) {
+        this.gatewayPaymentId = gatewayPaymentId;
     }
 
     public Instant getPaidAt() {

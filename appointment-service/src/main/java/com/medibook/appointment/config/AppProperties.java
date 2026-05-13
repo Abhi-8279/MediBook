@@ -13,6 +13,7 @@ public class AppProperties {
     private final DownstreamService providerService = new DownstreamService();
     private final DownstreamService scheduleService = new DownstreamService();
     private final DownstreamService paymentService = new DownstreamService();
+    private final DownstreamService notificationService = new DownstreamService();
     private final Internal internal = new Internal();
     private final Cancellation cancellation = new Cancellation();
 
@@ -30,6 +31,10 @@ public class AppProperties {
 
     public DownstreamService getPaymentService() {
         return paymentService;
+    }
+
+    public DownstreamService getNotificationService() {
+        return notificationService;
     }
 
     public Internal getInternal() {
@@ -51,11 +56,11 @@ public class AppProperties {
         private int readTimeoutMs = 5000;
 
         public String getBaseUrl() {
-            return baseUrl;
+            return normalizeBaseUrl(baseUrl);
         }
 
         public void setBaseUrl(String baseUrl) {
-            this.baseUrl = baseUrl;
+            this.baseUrl = normalizeBaseUrl(baseUrl);
         }
 
         public int getConnectTimeoutMs() {
@@ -72,6 +77,13 @@ public class AppProperties {
 
         public void setReadTimeoutMs(int readTimeoutMs) {
             this.readTimeoutMs = readTimeoutMs;
+        }
+
+        private String normalizeBaseUrl(String value) {
+            if (value == null || value.isBlank() || value.contains("://")) {
+                return value;
+            }
+            return "http://" + value;
         }
     }
 

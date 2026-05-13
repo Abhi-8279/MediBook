@@ -3,7 +3,9 @@ package com.medibook.notification.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medibook.notification.dto.request.FollowUpReminderRequest;
-import com.medibook.notification.dto.request.ScheduleAppointmentRemindersRequest;
+import com.medibook.notification.dto.request.SendAppointmentBookedNotificationRequest;
+import com.medibook.notification.dto.request.SendAppointmentCancelledNotificationRequest;
+import com.medibook.notification.dto.request.SendAppointmentRescheduledNotificationRequest;
 import com.medibook.notification.dto.request.SendNotificationRequest;
 import com.medibook.notification.enums.NotificationChannel;
 import com.medibook.notification.enums.NotificationType;
@@ -15,11 +17,6 @@ import com.medibook.notification.messaging.event.PaymentProcessedEvent;
 import com.medibook.notification.messaging.event.PaymentRefundedEvent;
 import com.medibook.notification.service.NotificationService;
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +29,7 @@ import org.springframework.util.StringUtils;
 public class NotificationEventListener {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationEventListener.class);
-
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd MMM uuuu");
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("hh:mm a");
     private static final List<NotificationChannel> DEFAULT_PATIENT_CHANNELS =
-            List.of(NotificationChannel.APP, NotificationChannel.EMAIL);
-    private static final List<NotificationChannel> DEFAULT_PROVIDER_CHANNELS =
             List.of(NotificationChannel.APP, NotificationChannel.EMAIL);
 
     private final NotificationService notificationService;
@@ -100,87 +92,39 @@ public class NotificationEventListener {
     }
 
     private void onAppointmentBooked(AppointmentBookedEvent event) {
-        String appointmentWindow = formatWindow(event.appointmentDate(), event.startTime(), event.endTime());
-        notificationService.send(new SendNotificationRequest(
+        notificationService.sendAppointmentBookedNotifications(new SendAppointmentBookedNotificationRequest(
+                event.appointmentId(),
                 event.patientId(),
-                NotificationType.BOOKING,
-                "Appointment confirmed",
-                "Your " + event.serviceType() + " appointment is confirmed for " + appointmentWindow + ".",
-                DEFAULT_PATIENT_CHANNELS,
-                event.appointmentId(),
-                "APPOINTMENT"));
-        notificationService.send(new SendNotificationRequest(
                 event.providerId(),
-                NotificationType.BOOKING,
-                "New appointment booked",
-                "A new appointment has been booked for " + appointmentWindow + ".",
-                DEFAULT_PROVIDER_CHANNELS,
-                event.appointmentId(),
-                "APPOINTMENT"));
-        scheduleReminders(
-                event.patientId(),
-                event.appointmentId(),
-                event.providerId(),
-                "Appointment reminder",
-                "Reminder: you have an appointment scheduled for " + appointmentWindow + ".",
+                event.serviceType(),
                 event.appointmentDate(),
-                event.startTime());
+                event.startTime(),
+                event.endTime()));
     }
 
     private void onAppointmentCancelled(AppointmentCancelledEvent event) {
-        String appointmentWindow = formatWindow(event.appointmentDate(), event.startTime(), event.endTime());
-        String reasonSuffix = StringUtils.hasText(event.cancellationReason())
-                ? " Reason: " + event.cancellationReason().trim() + "."
-                : "";
-        notificationService.cancelScheduledAppointmentReminders(event.appointmentId());
-        notificationService.send(new SendNotificationRequest(
+        notificationService.sendAppointmentCancelledNotifications(new SendAppointmentCancelledNotificationRequest(
+                event.appointmentId(),
                 event.patientId(),
-                NotificationType.CANCELLATION,
-                "Appointment cancelled",
-                "Your appointment scheduled for " + appointmentWindow + " has been cancelled." + reasonSuffix,
-                DEFAULT_PATIENT_CHANNELS,
-                event.appointmentId(),
-                "APPOINTMENT"));
-        notificationService.send(new SendNotificationRequest(
                 event.providerId(),
-                NotificationType.CANCELLATION,
-                "Appointment cancelled",
-                "An appointment scheduled for " + appointmentWindow + " has been cancelled." + reasonSuffix,
-                DEFAULT_PROVIDER_CHANNELS,
-                event.appointmentId(),
-                "APPOINTMENT"));
+                event.appointmentDate(),
+                event.startTime(),
+                event.endTime(),
+                event.cancellationReason()));
     }
 
     private void onAppointmentRescheduled(AppointmentRescheduledEvent event) {
-        String previousWindow = formatWindow(
+        notificationService.sendAppointmentRescheduledNotifications(new SendAppointmentRescheduledNotificationRequest(
+                event.appointmentId(),
+                event.patientId(),
+                event.providerId(),
+                event.serviceType(),
                 event.previousAppointmentDate(),
                 event.previousStartTime(),
-                event.previousEndTime());
-        String newWindow = formatWindow(event.appointmentDate(), event.startTime(), event.endTime());
-        notificationService.send(new SendNotificationRequest(
-                event.patientId(),
-                NotificationType.BOOKING,
-                "Appointment rescheduled",
-                "Your appointment has been moved from " + previousWindow + " to " + newWindow + ".",
-                DEFAULT_PATIENT_CHANNELS,
-                event.appointmentId(),
-                "APPOINTMENT"));
-        notificationService.send(new SendNotificationRequest(
-                event.providerId(),
-                NotificationType.BOOKING,
-                "Appointment rescheduled",
-                "An appointment has been moved from " + previousWindow + " to " + newWindow + ".",
-                DEFAULT_PROVIDER_CHANNELS,
-                event.appointmentId(),
-                "APPOINTMENT"));
-        scheduleReminders(
-                event.patientId(),
-                event.appointmentId(),
-                event.providerId(),
-                "Appointment reminder",
-                "Reminder: you have a rescheduled " + event.serviceType() + " appointment on " + newWindow + ".",
+                event.previousEndTime(),
                 event.appointmentDate(),
-                event.startTime());
+                event.startTime(),
+                event.endTime()));
     }
 
     private void onPaymentProcessed(PaymentProcessedEvent event) {
@@ -213,30 +157,6 @@ public class NotificationEventListener {
                 DEFAULT_PATIENT_CHANNELS,
                 event.paymentId(),
                 "PAYMENT"));
-    }
-
-    private void scheduleReminders(
-            String recipientId,
-            String appointmentId,
-            String providerId,
-            String title,
-            String message,
-            LocalDate appointmentDate,
-            java.time.LocalTime startTime) {
-        Instant appointmentStartAt = LocalDateTime.of(appointmentDate, startTime).toInstant(ZoneOffset.UTC);
-        notificationService.scheduleAppointmentReminders(new ScheduleAppointmentRemindersRequest(
-                recipientId,
-                appointmentId,
-                providerId,
-                title,
-                message,
-                DEFAULT_PATIENT_CHANNELS,
-                appointmentStartAt.minusSeconds(24 * 60 * 60),
-                appointmentStartAt.minusSeconds(60 * 60)));
-    }
-
-    private String formatWindow(LocalDate date, java.time.LocalTime startTime, java.time.LocalTime endTime) {
-        return date.format(DATE_FORMAT) + " from " + startTime.format(TIME_FORMAT) + " to " + endTime.format(TIME_FORMAT);
     }
 
     private String formatMoney(BigDecimal amount, String currency) {

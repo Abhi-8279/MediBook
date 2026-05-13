@@ -5,7 +5,7 @@ spring:
   application:
     name: payment-service
   datasource:
-    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/medibook_payment?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    url: ${MYSQL_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/medibook_payment?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:Abhi@8279}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -28,7 +28,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_SERVER_URL:http://${EUREKA_SERVER_HOST:localhost}:${EUREKA_SERVER_PORT:8761}/eureka}
     register-with-eureka: true
     fetch-registry: true
     healthcheck:
@@ -42,6 +42,9 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    rabbit:
+      enabled: ${RABBIT_HEALTH_ENABLED:false}
   endpoint:
     health:
       show-details: when_authorized
@@ -68,3 +71,13 @@ app:
     header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
   payment:
     default-currency: ${PAYMENT_DEFAULT_CURRENCY:INR}
+    razorpay:
+      enabled: ${RAZORPAY_ENABLED:true}
+      key-id: ${RAZORPAY_KEY_ID:rzp_test_SjzEMHV8QnBYi8}
+      key-secret: ${RAZORPAY_KEY_SECRET:hpt5cU45U4E8DQ8D56dgc8qz}
+      api-base-url: ${RAZORPAY_API_BASE_URL:https://api.razorpay.com/v1}
+      connect-timeout-ms: ${RAZORPAY_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${RAZORPAY_READ_TIMEOUT_MS:10000}
+      checkout-name: ${RAZORPAY_CHECKOUT_NAME:MediBook}
+      checkout-description: ${RAZORPAY_CHECKOUT_DESCRIPTION:Appointment payment}
+      checkout-image-url: ${RAZORPAY_CHECKOUT_IMAGE_URL:}

@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medibook.appointment.dto.request.BookAppointmentRequest;
 import com.medibook.appointment.dto.request.CancelAppointmentRequest;
 import com.medibook.appointment.dto.request.CompleteAppointmentRequest;
@@ -19,7 +18,6 @@ import com.medibook.appointment.entity.Appointment;
 import com.medibook.appointment.enums.AppointmentStatus;
 import com.medibook.appointment.enums.ConsultationMode;
 import com.medibook.appointment.enums.Role;
-import com.medibook.appointment.messaging.NotificationEventPublisher;
 import com.medibook.appointment.repository.AppointmentRepository;
 import com.medibook.appointment.security.AuthenticatedUser;
 import com.medibook.appointment.service.impl.AppointmentServiceImpl;
@@ -35,7 +33,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentServiceImplTest {
@@ -54,20 +51,20 @@ class AppointmentServiceImplTest {
     @Mock
     private PaymentServiceGateway paymentServiceGateway;
 
-    private RecordingNotificationEventPublisher notificationEventPublisher;
+    private RecordingNotificationServiceGateway notificationServiceGateway;
     private AppointmentServiceImpl appointmentService;
     private AppProperties appProperties;
 
     @BeforeEach
     void setUp() {
         appProperties = new AppProperties();
-        notificationEventPublisher = new RecordingNotificationEventPublisher();
+        notificationServiceGateway = new RecordingNotificationServiceGateway();
         appointmentService = new AppointmentServiceImpl(
                 appointmentRepository,
                 providerServiceGateway,
                 scheduleServiceGateway,
                 paymentServiceGateway,
-                notificationEventPublisher,
+                notificationServiceGateway,
                 appProperties,
                 FIXED_CLOCK);
     }
@@ -112,7 +109,7 @@ class AppointmentServiceImplTest {
         assertThat(response.slotId()).isEqualTo("slot-1");
         verify(providerServiceGateway).assertProviderPubliclyVisible("provider-1");
         verify(scheduleServiceGateway).bookSlot(eq("slot-1"), any(String.class));
-        assertThat(notificationEventPublisher.bookedAppointment).isSameAs(savedAppointment);
+        assertThat(notificationServiceGateway.bookedAppointment).isSameAs(savedAppointment);
     }
 
     @Test
@@ -137,7 +134,7 @@ class AppointmentServiceImplTest {
         assertThat(response.cancellationReason()).isEqualTo("Need to reschedule later");
         verify(scheduleServiceGateway).releaseSlot("slot-1");
         verify(paymentServiceGateway).requestRefund("appointment-1", "Need to reschedule later");
-        assertThat(notificationEventPublisher.cancelledAppointment).isSameAs(appointment);
+        assertThat(notificationServiceGateway.cancelledAppointment).isSameAs(appointment);
     }
 
     @Test
@@ -194,10 +191,10 @@ class AppointmentServiceImplTest {
         assertThat(response.appointmentDate()).isEqualTo(LocalDate.of(2026, 4, 26));
         verify(scheduleServiceGateway).bookSlot("slot-2", "appointment-1");
         verify(scheduleServiceGateway).releaseSlot("slot-1");
-        assertThat(notificationEventPublisher.rescheduledAppointment).isSameAs(appointment);
-        assertThat(notificationEventPublisher.previousAppointmentDate).isEqualTo(LocalDate.of(2026, 4, 25));
-        assertThat(notificationEventPublisher.previousStartTime).isEqualTo(LocalTime.of(11, 0));
-        assertThat(notificationEventPublisher.previousEndTime).isEqualTo(LocalTime.of(11, 30));
+        assertThat(notificationServiceGateway.rescheduledAppointment).isSameAs(appointment);
+        assertThat(notificationServiceGateway.previousAppointmentDate).isEqualTo(LocalDate.of(2026, 4, 25));
+        assertThat(notificationServiceGateway.previousStartTime).isEqualTo(LocalTime.of(11, 0));
+        assertThat(notificationServiceGateway.previousEndTime).isEqualTo(LocalTime.of(11, 30));
     }
 
     @Test
@@ -302,7 +299,7 @@ class AppointmentServiceImplTest {
         return appointment;
     }
 
-    private static final class RecordingNotificationEventPublisher extends NotificationEventPublisher {
+    private static final class RecordingNotificationServiceGateway implements NotificationServiceGateway {
 
         private Appointment bookedAppointment;
         private Appointment cancelledAppointment;
@@ -311,22 +308,18 @@ class AppointmentServiceImplTest {
         private LocalTime previousStartTime;
         private LocalTime previousEndTime;
 
-        private RecordingNotificationEventPublisher() {
-            super((RabbitTemplate) null, new ObjectMapper());
-        }
-
         @Override
-        public void publishBooked(Appointment appointment) {
+        public void sendAppointmentBookedNotifications(Appointment appointment) {
             this.bookedAppointment = appointment;
         }
 
         @Override
-        public void publishCancelled(Appointment appointment) {
+        public void sendAppointmentCancelledNotifications(Appointment appointment) {
             this.cancelledAppointment = appointment;
         }
 
         @Override
-        public void publishRescheduled(
+        public void sendAppointmentRescheduledNotifications(
                 Appointment appointment,
                 LocalDate previousAppointmentDate,
                 LocalTime previousStartTime,

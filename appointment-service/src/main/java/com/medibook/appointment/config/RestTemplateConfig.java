@@ -12,10 +12,12 @@ public class RestTemplateConfig {
     public RestTemplate restTemplate(AppProperties appProperties) {
         int connectTimeout = Math.max(
                 Math.max(appProperties.getAuthService().getConnectTimeoutMs(), appProperties.getProviderService().getConnectTimeoutMs()),
-                Math.max(appProperties.getScheduleService().getConnectTimeoutMs(), appProperties.getPaymentService().getConnectTimeoutMs()));
+                Math.max(appProperties.getScheduleService().getConnectTimeoutMs(),
+                        Math.max(appProperties.getPaymentService().getConnectTimeoutMs(), appProperties.getNotificationService().getConnectTimeoutMs())));
         int readTimeout = Math.max(
                 Math.max(appProperties.getAuthService().getReadTimeoutMs(), appProperties.getProviderService().getReadTimeoutMs()),
-                Math.max(appProperties.getScheduleService().getReadTimeoutMs(), appProperties.getPaymentService().getReadTimeoutMs()));
+                Math.max(appProperties.getScheduleService().getReadTimeoutMs(),
+                        Math.max(appProperties.getPaymentService().getReadTimeoutMs(), appProperties.getNotificationService().getReadTimeoutMs())));
 
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeout);

@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
 
 spring:
   application:
@@ -12,7 +12,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_SERVER_URL:http://${EUREKA_SERVER_HOST:localhost}:${EUREKA_SERVER_PORT:8761}/eureka}
     register-with-eureka: true
     fetch-registry: true
     healthcheck:
@@ -34,14 +34,14 @@ medibook:
   cors:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:*}
   services:
-    auth: ${AUTH_SERVICE_URL:lb://auth-service}
-    provider: ${PROVIDER_SERVICE_URL:lb://provider-service}
-    schedule: ${SCHEDULE_SERVICE_URL:lb://schedule-service}
-    appointment: ${APPOINTMENT_SERVICE_URL:lb://appointment-service}
-    payment: ${PAYMENT_SERVICE_URL:lb://payment-service}
-    review: ${REVIEW_SERVICE_URL:lb://review-service}
-    notification: ${NOTIFICATION_SERVICE_URL:lb://notification-service}
-    record: ${RECORD_SERVICE_URL:lb://record-service}
+    auth: ${AUTH_SERVICE_URL:http://localhost:8081}
+    provider: ${PROVIDER_SERVICE_URL:http://localhost:8082}
+    schedule: ${SCHEDULE_SERVICE_URL:http://localhost:8083}
+    appointment: ${APPOINTMENT_SERVICE_URL:http://localhost:8084}
+    payment: ${PAYMENT_SERVICE_URL:http://localhost:8085}
+    review: ${REVIEW_SERVICE_URL:http://localhost:8086}
+    notification: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
+    record: ${RECORD_SERVICE_URL:http://localhost:8088}
 
 logging:
   level:

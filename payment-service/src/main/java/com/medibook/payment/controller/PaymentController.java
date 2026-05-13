@@ -1,8 +1,12 @@
 package com.medibook.payment.controller;
 
+import com.medibook.payment.dto.request.CreateCheckoutOrderRequest;
+import com.medibook.payment.dto.request.MarkCheckoutPaymentFailedRequest;
 import com.medibook.payment.dto.request.ProcessPaymentRequest;
 import com.medibook.payment.dto.request.RefundPaymentRequest;
 import com.medibook.payment.dto.request.UpdatePaymentStatusRequest;
+import com.medibook.payment.dto.request.VerifyCheckoutPaymentRequest;
+import com.medibook.payment.dto.response.CheckoutOrderResponse;
 import com.medibook.payment.dto.response.InvoiceResponse;
 import com.medibook.payment.dto.response.PaymentResponse;
 import com.medibook.payment.dto.response.PaymentStatusResponse;
@@ -19,8 +23,8 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,6 +52,34 @@ public class PaymentController {
             @Valid @RequestBody ProcessPaymentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(paymentService.processPayment(authenticatedUser, request));
+    }
+
+    @PostMapping("/checkout/order")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('PATIENT','ADMIN')")
+    public ResponseEntity<CheckoutOrderResponse> createCheckoutOrder(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @Valid @RequestBody CreateCheckoutOrderRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(paymentService.createCheckoutOrder(authenticatedUser, request));
+    }
+
+    @PostMapping("/checkout/confirm")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('PATIENT','ADMIN')")
+    public ResponseEntity<PaymentResponse> verifyCheckoutPayment(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @Valid @RequestBody VerifyCheckoutPaymentRequest request) {
+        return ResponseEntity.ok(paymentService.verifyCheckoutPayment(authenticatedUser, request));
+    }
+
+    @PostMapping("/checkout/failure")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('PATIENT','ADMIN')")
+    public ResponseEntity<PaymentResponse> markCheckoutFailure(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @Valid @RequestBody MarkCheckoutPaymentFailedRequest request) {
+        return ResponseEntity.ok(paymentService.markCheckoutPaymentFailed(authenticatedUser, request));
     }
 
     @GetMapping("/appointments/{appointmentId}")

@@ -6,4 +6,4 @@
 **/.settings/
 .idea/
 *.iml
-
+auth-service/src/main/resources/application-oauth.yml

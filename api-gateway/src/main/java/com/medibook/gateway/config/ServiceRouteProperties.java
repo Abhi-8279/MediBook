@@ -1,7 +1,6 @@
 package com.medibook.gateway.config;
 
-import jakarta.validation.constraints.NotNull;
-import java.net.URI;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -9,91 +8,98 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "medibook.services")
 public class ServiceRouteProperties {
 
-    @NotNull
-    private URI auth = URI.create("http://localhost:8081");
+    @NotBlank
+    private String auth = "http://localhost:8081";
 
-    @NotNull
-    private URI provider = URI.create("http://localhost:8082");
+    @NotBlank
+    private String provider = "http://localhost:8082";
 
-    @NotNull
-    private URI schedule = URI.create("http://localhost:8083");
+    @NotBlank
+    private String schedule = "http://localhost:8083";
 
-    @NotNull
-    private URI appointment = URI.create("http://localhost:8084");
+    @NotBlank
+    private String appointment = "http://localhost:8084";
 
-    @NotNull
-    private URI payment = URI.create("http://localhost:8085");
+    @NotBlank
+    private String payment = "http://localhost:8085";
 
-    @NotNull
-    private URI review = URI.create("http://localhost:8086");
+    @NotBlank
+    private String review = "http://localhost:8086";
 
-    @NotNull
-    private URI notification = URI.create("http://localhost:8087");
+    @NotBlank
+    private String notification = "http://localhost:8087";
 
-    @NotNull
-    private URI record = URI.create("http://localhost:8088");
+    @NotBlank
+    private String record = "http://localhost:8088";
 
-    public URI getAuth() {
-        return auth;
+    public String getAuth() {
+        return normalizeRouteUri(auth);
     }
 
-    public void setAuth(URI auth) {
-        this.auth = auth;
+    public void setAuth(String auth) {
+        this.auth = normalizeRouteUri(auth);
     }
 
-    public URI getProvider() {
-        return provider;
+    public String getProvider() {
+        return normalizeRouteUri(provider);
     }
 
-    public void setProvider(URI provider) {
-        this.provider = provider;
+    public void setProvider(String provider) {
+        this.provider = normalizeRouteUri(provider);
     }
 
-    public URI getSchedule() {
-        return schedule;
+    public String getSchedule() {
+        return normalizeRouteUri(schedule);
     }
 
-    public void setSchedule(URI schedule) {
-        this.schedule = schedule;
+    public void setSchedule(String schedule) {
+        this.schedule = normalizeRouteUri(schedule);
     }
 
-    public URI getAppointment() {
-        return appointment;
+    public String getAppointment() {
+        return normalizeRouteUri(appointment);
     }
 
-    public void setAppointment(URI appointment) {
-        this.appointment = appointment;
+    public void setAppointment(String appointment) {
+        this.appointment = normalizeRouteUri(appointment);
     }
 
-    public URI getPayment() {
-        return payment;
+    public String getPayment() {
+        return normalizeRouteUri(payment);
     }
 
-    public void setPayment(URI payment) {
-        this.payment = payment;
+    public void setPayment(String payment) {
+        this.payment = normalizeRouteUri(payment);
     }
 
-    public URI getReview() {
-        return review;
+    public String getReview() {
+        return normalizeRouteUri(review);
     }
 
-    public void setReview(URI review) {
-        this.review = review;
+    public void setReview(String review) {
+        this.review = normalizeRouteUri(review);
     }
 
-    public URI getNotification() {
-        return notification;
+    public String getNotification() {
+        return normalizeRouteUri(notification);
     }
 
-    public void setNotification(URI notification) {
-        this.notification = notification;
+    public void setNotification(String notification) {
+        this.notification = normalizeRouteUri(notification);
     }
 
-    public URI getRecord() {
-        return record;
+    public String getRecord() {
+        return normalizeRouteUri(record);
     }
 
-    public void setRecord(URI record) {
-        this.record = record;
+    public void setRecord(String record) {
+        this.record = normalizeRouteUri(record);
+    }
+
+    private String normalizeRouteUri(String value) {
+        if (value == null || value.isBlank() || value.contains("://")) {
+            return value;
+        }
+        return "http://" + value;
     }
 }

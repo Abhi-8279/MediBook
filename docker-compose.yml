@@ -5,7 +5,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
     ports:
-      - "3306:3306"
+      - "${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - medibook-mysql-data:/var/lib/mysql
     healthcheck:
@@ -61,6 +61,7 @@ services:
       MYSQL_USERNAME: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Abhi@8279}
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      NOTIFICATION_SERVICE_URL: http://notification-service:8087
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
       JWT_SECRET: ${JWT_SECRET:-medibook-auth-secret-key-change-before-production-123456}
     ports:
@@ -237,7 +238,19 @@ services:
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-medibook-internal-key-change-me}
-      NOTIFICATION_EMAIL_ENABLED: ${NOTIFICATION_EMAIL_ENABLED:-false}
+      NOTIFICATION_EMAIL_ENABLED: ${NOTIFICATION_EMAIL_ENABLED:-true}
+      NOTIFICATION_EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM:-no-reply@medibook.local}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS_ENABLE: ${MAIL_SMTP_STARTTLS_ENABLE:-true}
+      MAIL_SMTP_STARTTLS_REQUIRED: ${MAIL_SMTP_STARTTLS_REQUIRED:-true}
+      MAIL_SMTP_SSL_TRUST: ${MAIL_SMTP_SSL_TRUST:-smtp.gmail.com}
+      MAIL_SMTP_CONNECTION_TIMEOUT_MS: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:-5000}
+      MAIL_SMTP_TIMEOUT_MS: ${MAIL_SMTP_TIMEOUT_MS:-5000}
+      MAIL_SMTP_WRITE_TIMEOUT_MS: ${MAIL_SMTP_WRITE_TIMEOUT_MS:-5000}
       NOTIFICATION_SMS_ENABLED: ${NOTIFICATION_SMS_ENABLED:-false}
     ports:
       - "8087:8087"
@@ -304,6 +317,14 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      PROVIDER_SERVICE_URL: http://provider-service:8082
+      SCHEDULE_SERVICE_URL: http://schedule-service:8083
+      APPOINTMENT_SERVICE_URL: http://appointment-service:8084
+      PAYMENT_SERVICE_URL: http://payment-service:8085
+      REVIEW_SERVICE_URL: http://review-service:8086
+      NOTIFICATION_SERVICE_URL: http://notification-service:8087
+      RECORD_SERVICE_URL: http://record-service:8088
     ports:
       - "8080:8080"
 

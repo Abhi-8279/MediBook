@@ -1,6 +1,10 @@
 package com.medibook.notification.service;
 
 import com.medibook.notification.dto.request.FollowUpReminderRequest;
+import com.medibook.notification.dto.request.SendAppointmentBookedNotificationRequest;
+import com.medibook.notification.dto.request.SendAppointmentCancelledNotificationRequest;
+import com.medibook.notification.dto.request.SendAppointmentRescheduledNotificationRequest;
+import com.medibook.notification.dto.request.SendDirectEmailRequest;
 import com.medibook.notification.dto.request.ScheduleAppointmentRemindersRequest;
 import com.medibook.notification.dto.request.SendBulkNotificationRequest;
 import com.medibook.notification.dto.request.SendNotificationRequest;
@@ -17,6 +21,14 @@ import java.util.List;
 public interface NotificationService {
 
     List<NotificationResponse> send(SendNotificationRequest request);
+
+    MessageResponse sendDirectEmail(SendDirectEmailRequest request);
+
+    void sendAppointmentBookedNotifications(SendAppointmentBookedNotificationRequest request);
+
+    void sendAppointmentCancelledNotifications(SendAppointmentCancelledNotificationRequest request);
+
+    void sendAppointmentRescheduledNotifications(SendAppointmentRescheduledNotificationRequest request);
 
     void sendFollowUpReminder(FollowUpReminderRequest request);
 

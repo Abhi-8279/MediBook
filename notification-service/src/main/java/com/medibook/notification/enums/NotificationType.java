@@ -6,5 +6,6 @@ public enum NotificationType {
     CANCELLATION,
     PAYMENT,
     FOLLOWUP,
-    BROADCAST
+    BROADCAST,
+    SECURITY
 }

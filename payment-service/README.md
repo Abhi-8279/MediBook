@@ -18,6 +18,9 @@ refund handling, invoice generation, payment status tracking, and provider reven
 ## Endpoints
 
 - `POST /api/v1/payments/process`
+- `POST /api/v1/payments/checkout/order`
+- `POST /api/v1/payments/checkout/confirm`
+- `POST /api/v1/payments/checkout/failure`
 - `GET /api/v1/payments/appointments/{appointmentId}`
 - `GET /api/v1/payments/me`
 - `GET /api/v1/payments/patients/{patientId}`
@@ -35,7 +38,7 @@ refund handling, invoice generation, payment status tracking, and provider reven
 ## Notes
 
 - IDs use UUID strings so this service stays consistent with the rest of your MediBook microservices.
-- Online payment modes are recorded as `PAID` immediately in this implementation.
+- `CARD`, `UPI`, and `WALLET` now create a Razorpay order first and move to `PAID` only after signature verification.
 - `CASH` is treated as pay-at-clinic and starts in `PENDING` until an admin updates it.
 - Invoice generation is allowed only after the linked appointment is marked `COMPLETED`.
 - Revenue summaries include total paid revenue, pending amount, refunded amount, and monthly paid breakdowns.
@@ -53,6 +56,13 @@ Set these environment variables if you do not want the defaults from `applicatio
 - `INTERNAL_API_KEY`
 - `INTERNAL_API_KEY_HEADER`
 - `SERVER_PORT`
+- `RAZORPAY_ENABLED`
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_API_BASE_URL`
+- `RAZORPAY_CHECKOUT_NAME`
+- `RAZORPAY_CHECKOUT_DESCRIPTION`
+- `RAZORPAY_CHECKOUT_IMAGE_URL`
 
 Build and run with:
 
