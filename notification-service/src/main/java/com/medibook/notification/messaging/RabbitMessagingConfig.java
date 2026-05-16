@@ -4,10 +4,12 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@ConditionalOnProperty(name = "app.messaging.rabbit.enabled", havingValue = "true")
 public class RabbitMessagingConfig {
 
     public static final String NOTIFICATION_EVENTS_EXCHANGE = "medibook.notification.events";
