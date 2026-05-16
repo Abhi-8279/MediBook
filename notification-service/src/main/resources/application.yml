@@ -93,3 +93,6 @@ app:
     sender-id: ${NOTIFICATION_SMS_SENDER_ID:MediBook}
   reminders:
     dispatch-interval-ms: ${NOTIFICATION_REMINDER_DISPATCH_INTERVAL_MS:30000}
+  messaging:
+    rabbit:
+      enabled: ${APP_MESSAGING_RABBIT_ENABLED:false}
